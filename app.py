@@ -3,6 +3,7 @@ import spotipy
 from spotipy.oauth2 import SpotifyOAuth
 from dotenv import load_dotenv
 import os
+import time
 
 # Load environment variables from .env file
 load_dotenv()
@@ -47,6 +48,21 @@ def getToken():
     token_info = session.get(TOKEN_INFO, None)
     return token_info
 
+def getTrackFeatures(track_ids):
+    user_token = getToken()
+    sp = spotipy.Spotify(auth=user_token['access_token'])
+    time.sleep(0.5)
+    meta = sp.track(track_ids)
+    name = meta["name"]
+    album = meta["album"]["name"]
+    artists = []
+    for artist in meta["album"]["artists"]: # Handles multiple artists.
+        artists.append(artist["name"])
+    artist_names = ", ".join(artists)
+    album_cover = meta["album"]["images"][0]["url"]
+    track_info = [name, album, artist_names, album_cover]
+    return track_info
+
 @app.route("/stats")
 def stats():
     user_token = getToken()
@@ -55,5 +71,25 @@ def stats():
         return redirect(url_for("login"))
 
     sp = spotipy.Spotify(auth=user_token['access_token'])
-    userTopSongs = sp.current_user_top_tracks(limit=5, offset=0, time_range="short_term")
-    return str(userTopSongs['items'])
+    time.sleep(0.5)
+    userTopSongs_short = sp.current_user_top_tracks(
+        limit=5, 
+        offset=0, 
+        time_range="short_term"
+        )
+    userTopSongs_medium = sp.current_user_top_tracks(
+        limit=5, 
+        offset=0, 
+        time_range="medium_term"
+        )
+    userTopSongs_long = sp.current_user_top_tracks(
+        limit=5, 
+        offset=0, 
+        time_range="long_term"
+        )
+    track_ids = [track['id'] for track in userTopSongs_short['items']]
+    track_details = []
+    for track_id in track_ids:
+        track_info = getTrackFeatures(track_id)
+        track_details.append(track_info)
+    return track_details
