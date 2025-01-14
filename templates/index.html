@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Spotify App</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            margin-top: 50px;
+        }
+        button {
+            background-color: #1db954;  /* Spotify Green */
+            color: white;
+            border: none;
+            padding: 15px 32px;
+            font-size: 16px;
+            cursor: pointer;
+            border-radius: 5px;
+        }
+        button:hover {
+            background-color: #1ed760;  /* Lighter Green on hover */
+        }
+    </style>
+</head>
+<body>
+    <h1>Welcome to the REAL WRAPPED ;)</h1>
+    <p>Click below to log in with your Spotify account:</p>
+    <a href="{{ url_for('login') }}">
+        <button>Login with Spotify</button>
+    </a>
+</body>
+</html>
