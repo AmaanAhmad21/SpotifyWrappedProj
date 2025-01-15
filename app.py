@@ -4,6 +4,7 @@ from spotipy.oauth2 import SpotifyOAuth
 from dotenv import load_dotenv
 import os
 import time
+import pandas as pd
 
 # Load environment variables from .env file
 load_dotenv()
@@ -77,19 +78,23 @@ def stats():
         offset=0, 
         time_range="short_term"
         )
-    userTopSongs_medium = sp.current_user_top_tracks(
-        limit=5, 
-        offset=0, 
-        time_range="medium_term"
-        )
-    userTopSongs_long = sp.current_user_top_tracks(
-        limit=5, 
-        offset=0, 
-        time_range="long_term"
-        )
+    # userTopSongs_medium = sp.current_user_top_tracks(
+    #     limit=5, 
+    #     offset=0, 
+    #     time_range="medium_term"
+    #     )
+    # userTopSongs_long = sp.current_user_top_tracks(
+    #     limit=5, 
+    #     offset=0, 
+    #     time_range="long_term"
+    #     )
     track_ids = [track['id'] for track in userTopSongs_short['items']]
     track_details = []
     for track_id in track_ids:
         track_info = getTrackFeatures(track_id)
         track_details.append(track_info)
-    return track_details
+    # Create the datatable.
+    df = pd.DataFrame(track_details, columns=["name", "album", "artist_names", "album_cover"])
+    print("Generated DataFrame:")
+    print(df)
+    return track_details        
