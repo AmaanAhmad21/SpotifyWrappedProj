@@ -5,6 +5,7 @@ from dotenv import load_dotenv
 import os
 import time
 import pandas as pd
+import datetime
 
 # Load environment variables from .env file
 load_dotenv()
@@ -64,37 +65,43 @@ def getTrackFeatures(track_ids):
     track_info = [name, album, artist_names, album_cover]
     return track_info
 
-@app.route("/stats")
+@app.route("/stats", methods=["GET", "POST"])
 def stats():
     user_token = getToken()
     if not user_token:
         print("No token, redirecting to login...")  # Debugging statement
         return redirect(url_for("login"))
 
+    time_range = request.form.get("time_range", "short_term")  # Default to short_term
     sp = spotipy.Spotify(auth=user_token['access_token'])
     time.sleep(0.5)
-    userTopSongs_short = sp.current_user_top_tracks(
-        limit=5, 
-        offset=0, 
-        time_range="short_term"
-        )
-    # userTopSongs_medium = sp.current_user_top_tracks(
-    #     limit=5, 
-    #     offset=0, 
-    #     time_range="medium_term"
-    #     )
-    # userTopSongs_long = sp.current_user_top_tracks(
-    #     limit=5, 
-    #     offset=0, 
-    #     time_range="long_term"
-    #     )
-    track_ids = [track['id'] for track in userTopSongs_short['items']]
-    track_details = []
-    for track_id in track_ids:
-        track_info = getTrackFeatures(track_id)
-        track_details.append(track_info)
-    # Create the datatable.
-    df = pd.DataFrame(track_details, columns=["name", "album", "artist_names", "album_cover"])
-    print("Generated DataFrame:")
+
+    # Fetch top tracks based on the selected time range
+    userTopSongs = sp.current_user_top_tracks(limit=5, offset=0, time_range=time_range)
+    track_ids = [track['id'] for track in userTopSongs['items']]
+
+    def convertToDf(track_ids):
+        tracks = []
+        for track_id in track_ids:
+            time.sleep(0.5)  # To avoid hitting API rate limits
+            track = getTrackFeatures(track_id)
+            tracks.append(track)
+
+        # Create DataFrame
+        columns = ["name", "album", "artist", "album_cover"]
+        df = pd.DataFrame(tracks, columns=columns)
+
+        # Save to CSV with a timestamped filename
+        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"data_{time_range}_{timestamp}.csv"
+        df.to_csv(filename, index=False)
+        print(f"Data saved to {filename}")  # Debugging statement
+        return df
+
+    # Convert track IDs to DataFrame and save to CSV
+    df = convertToDf(track_ids)
+
+    # Debugging: Print the DataFrame
     print(df)
-    return track_details        
+    
+    return render_template("stats.html", tracks=df.to_dict(orient="records"), time_range=time_range)
