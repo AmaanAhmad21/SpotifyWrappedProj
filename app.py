@@ -75,33 +75,26 @@ def stats():
     time_range = request.form.get("time_range", "short_term")  # Default to short_term
     sp = spotipy.Spotify(auth=user_token['access_token'])
     time.sleep(0.5)
+    userTopSongs = sp.current_user_top_tracks(
+        limit=5, 
+        offset=0, 
+        time_range=time_range
+        )
 
-    # Fetch top tracks based on the selected time range
-    userTopSongs = sp.current_user_top_tracks(limit=5, offset=0, time_range=time_range)
     track_ids = [track['id'] for track in userTopSongs['items']]
-
     def convertToDf(track_ids):
         tracks = []
-        for track_id in track_ids:
-            time.sleep(0.5)  # To avoid hitting API rate limits
-            track = getTrackFeatures(track_id)
+        for i in range(len(track_ids)):
+            time.sleep(0.5)
+            track = getTrackFeatures(track_ids[i])
             tracks.append(track)
-
-        # Create DataFrame
-        columns = ["name", "album", "artist", "album_cover"]
-        df = pd.DataFrame(tracks, columns=columns)
-
-        # Save to CSV with a timestamped filename
+        
+        df = pd.DataFrame(tracks, columns=["name", "album", "artist", "album_cover"])
         timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-        filename = f"data_{time_range}_{timestamp}.csv"
+        filename = f"top_tracks_{time_range}_{timestamp}.csv"
         df.to_csv(filename, index=False)
         print(f"Data saved to {filename}")  # Debugging statement
-        return df
-
-    # Convert track IDs to DataFrame and save to CSV
-    df = convertToDf(track_ids)
-
-    # Debugging: Print the DataFrame
-    print(df)
+        return filename
     
-    return render_template("stats.html", tracks=df.to_dict(orient="records"), time_range=time_range)
+    filename = convertToDf(track_ids)
+    return render_template('stats.html', userTopSongs=userTopSongs, filename=filename)

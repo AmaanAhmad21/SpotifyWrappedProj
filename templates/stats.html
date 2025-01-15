@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Spotify Stats</title>
+</head>
+<body>
+    <h1>Top Songs</h1>
+    <h2>User: {{ userTopSongs['user_name'] }}</h2>
+    <h3>Top Songs (Short Term):</h3>
+    <ul>
+        {% for song in userTopSongs['short_term'] %}
+            <li>{{ song.name }} by {{ song.artist }}</li>
+        {% endfor %}
+    </ul>
+    <h3>Top Songs (Medium Term):</h3>
+    <ul>
+        {% for song in userTopSongs['medium_term'] %}
+            <li>{{ song.name }} by {{ song.artist }}</li>
+        {% endfor %}
+    </ul>
+    <h3>Top Songs (Long Term):</h3>
+    <ul>
+        {% for song in userTopSongs['long_term'] %}
+            <li>{{ song.name }} by {{ song.artist }}</li>
+        {% endfor %}
+    </ul>
+    <a href="{{ url_for('index') }}">Go back</a>
+</body>
+</html>
