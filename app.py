@@ -97,4 +97,9 @@ def stats():
         return filename
     
     filename = convertToDf(track_ids)
-    return render_template('stats.html', userTopSongs=userTopSongs, filename=filename)
+    return render_template(
+        'stats.html',
+        tracks=userTopSongs,
+        filename=filename,
+        time_range=time_range
+    )

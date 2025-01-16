@@ -4,28 +4,54 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Spotify Stats</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+        }
+        table {
+            margin: 20px auto;
+            border-collapse: collapse;
+            width: 80%;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 10px;
+            text-align: center;
+        }
+        th {
+            background-color: #1db954;
+            color: white;
+        }
+        img {
+            max-width: 100px;
+            height: auto;
+        }
+    </style>
 </head>
 <body>
-    <h1>Top Songs</h1>
-    <h2>User: {{ userTopSongs['user_name'] }}</h2>
-    <h3>Top Songs (Short Term):</h3>
-    <ul>
-        {% for song in userTopSongs['short_term'] %}
-            <li>{{ song.name }} by {{ song.artist }}</li>
-        {% endfor %}
-    </ul>
-    <h3>Top Songs (Medium Term):</h3>
-    <ul>
-        {% for song in userTopSongs['medium_term'] %}
-            <li>{{ song.name }} by {{ song.artist }}</li>
-        {% endfor %}
-    </ul>
-    <h3>Top Songs (Long Term):</h3>
-    <ul>
-        {% for song in userTopSongs['long_term'] %}
-            <li>{{ song.name }} by {{ song.artist }}</li>
-        {% endfor %}
-    </ul>
-    <a href="{{ url_for('index') }}">Go back</a>
+    <h1>Your Top Tracks</h1>
+    <h2>Time Range: {{ time_range.replace('_', ' ').title() }}</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>Track Name</th>
+                <th>Album</th>
+                <th>Artist(s)</th>
+                <th>Album Cover</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for row in csv_data %}
+            <tr>
+                <td>{{ row[0] }}</td> <!-- Track Name -->
+                <td>{{ row[1] }}</td> <!-- Album -->
+                <td>{{ row[2] }}</td> <!-- Artist(s) -->
+                <td><img src="{{ row[3] }}" alt="Album Cover"></td> <!-- Album Cover -->
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    <a href="{{ url_for('home') }}">Go Back</a>
 </body>
 </html>
