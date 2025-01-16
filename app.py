@@ -6,6 +6,7 @@ import os
 import time
 import pandas as pd
 import datetime
+import gspread
 
 # Load environment variables from .env file
 load_dotenv()
@@ -29,7 +30,7 @@ def createSpotifyOAuth():
 
 @app.route("/")
 def home():
-    return render_template('index.html')
+    return render_template("index.html")
 
 @app.route("/login")
 def login():
@@ -52,7 +53,7 @@ def getToken():
 
 def getTrackFeatures(track_ids):
     user_token = getToken()
-    sp = spotipy.Spotify(auth=user_token['access_token'])
+    sp = spotipy.Spotify(auth=user_token["access_token"])
     time.sleep(0.5)
     meta = sp.track(track_ids)
     name = meta["name"]
@@ -73,7 +74,7 @@ def stats():
         return redirect(url_for("login"))
 
     time_range = request.form.get("time_range", "short_term")  # Default to short_term
-    sp = spotipy.Spotify(auth=user_token['access_token'])
+    sp = spotipy.Spotify(auth=user_token["access_token"])
     time.sleep(0.5)
     userTopSongs = sp.current_user_top_tracks(
         limit=5, 
@@ -81,7 +82,7 @@ def stats():
         time_range=time_range
         )
 
-    track_ids = [track['id'] for track in userTopSongs['items']]
+    track_ids = [track["id"] for track in userTopSongs["items"]]
     def convertToDf(track_ids):
         tracks = []
         for i in range(len(track_ids)):
@@ -97,8 +98,18 @@ def stats():
         return filename
     
     filename = convertToDf(track_ids)
+
+    def dataSheets():
+        gc = gspread.service_account(filename="wrappedproj-2e230b153ff5.json")
+        sh = gc.open("WrappedProj")
+        worksheet = sh.worksheet("short_term")
+        val = worksheet.acell("A3").value
+        print(val)
+
+    dataSheets()
+
     return render_template(
-        'stats.html',
+        "stats.html",
         tracks=userTopSongs,
         filename=filename,
         time_range=time_range
