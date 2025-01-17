@@ -52,6 +52,18 @@
             <button type="submit" name="time_range" value="long_term">Long Term</button>
         </form>
     </div>
+    <h2>Select Number of Songs to Display</h2>
+    <form method="POST" action="{{ url_for('stats') }}">
+        <label for="song_limit">Choose song limit:</label>
+        <select name="song_limit" id="song_limit">
+            <option value="5">Top 5</option>
+            <option value="10">Top 10</option>
+            <option value="25">Top 25</option>
+            <option value="50">Top 50</option>
+        </select>
+        <br><br>
+        <button type="submit">Apply</button>
+    </form>
     <a href="{{ url_for('home') }}" class="back-link">Go Back</a>
 </body>
 </html>
