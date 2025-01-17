@@ -8,7 +8,7 @@ import pandas as pd
 import datetime
 import gspread
 
-# Load environment variables from .env file
+# Load environment variables from .env file.
 load_dotenv()
 
 # Constants
@@ -16,9 +16,9 @@ CLIENT_ID = os.getenv("SPOTIFY_CLIENT_ID")
 CLIENT_SECRET = os.getenv("SPOTIFY_CLIENT_SECRET")
 TOKEN_INFO = "token_info"
 
-# Set the secret key for session encryption
+# Set the secret key for session encryption.
 app = Flask(__name__)
-app.secret_key = os.getenv("SPOTIFY_CLIENT_SECRET")  # Ensure it's set
+app.secret_key = os.getenv("SPOTIFY_CLIENT_SECRET")  
 
 def createSpotifyOAuth():
     return SpotifyOAuth(
@@ -66,19 +66,16 @@ def getTrackFeatures(track_ids):
     track_info = [name, album, artist_names, album_cover]
     return track_info
 
-# Define the time ranges
-time_ranges = ['short_term', 'medium_term', 'long_term']
-
-# Function to get the track IDs from the top tracks
+# Function to get the track IDs from the top tracks.
 def get_track_ids(top_tracks):
     return [track['id'] for track in top_tracks['items']]
 
-# Function to insert the track data to Google Sheets
+# Function to insert the track data to Google Sheets.
 def insert_to_gsheet(time_range, track_ids):
-    # Convert to DataFrame and update Google Sheets for each time range
+    # Convert to DataFrame and update Google Sheets for each time range.
     tracks = []
     for track_id in track_ids:
-        track = getTrackFeatures(track_id)  # Assuming getTrackFeatures returns track details
+        track = getTrackFeatures(track_id)  
         tracks.append(track)
 
     df = pd.DataFrame(tracks, columns=["name", "album", "artist_names", "album_cover"])
@@ -88,10 +85,7 @@ def insert_to_gsheet(time_range, track_ids):
     sh = gc.open("WrappedProj")
     worksheet = sh.worksheet(f"{time_range}")
     
-    # Resize the sheet to fit the data (optional)
-    worksheet.resize(len(df) + 1, len(df.columns))  # Resize to fit the data
-    
-    # Update the sheet with new data
+    # Update the sheet with new data.
     worksheet.update([df.columns.values.tolist()] + df.values.tolist())
     print(f"Updated Google Sheets for {time_range} with {len(df)} tracks.")
 
@@ -99,17 +93,18 @@ def insert_to_gsheet(time_range, track_ids):
 def stats():
     user_token = getToken()
     if not user_token:
-        print("No token, redirecting to login...")  # Debugging statement
+        print("No token, redirecting to login...")  # Debugging statement.
         return redirect(url_for("login"))
 
     sp = spotipy.Spotify(auth=user_token["access_token"])
 
-    # Check if the form has been submitted and get the time range selected by the user
-    time_range = request.form.get("time_range", "short_term")  # Default to "short_term" if no selection
+    # Check if the form has been submitted, and get the time range and song limit selected by the user.
+    time_range = request.form.get("time_range", "short_term")  # Default to "short_term" if no selection.
+    song_limit = request.form.get("song_limit", 5)  # Default to 5 if no selection.
 
-    # Fetch the top tracks for the selected time range
+    # Fetch the top tracks for the selected time range.
     userTopSongs = sp.current_user_top_tracks(
-        limit=5, 
+        limit=song_limit, 
         offset=0, 
         time_range=time_range
     )
@@ -122,5 +117,6 @@ def stats():
 
     return render_template(
         "stats.html",
-        time_range=time_range
+        time_range=time_range,
+        song_limit=song_limit 
     )
