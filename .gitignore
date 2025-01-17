@@ -3,4 +3,4 @@ venv/
 .env
 .cache
 *.csv
-
+*.json

@@ -48,16 +48,5 @@
         <button>Login with Spotify</button>
     </a>
 
-    <h2>Select Time Range for Top Tracks</h2>
-    <form method="POST" action="{{ url_for('stats') }}">
-        <label for="time_range">Choose time range:</label>
-        <select name="time_range" id="time_range">
-            <option value="short_term">Short Term</option>
-            <option value="medium_term">Medium Term</option>
-            <option value="long_term">Long Term</option>
-        </select>
-        <br><br>
-        <button type="submit">Submit</button>
-    </form>
 </body>
 </html>

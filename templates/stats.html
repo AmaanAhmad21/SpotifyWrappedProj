@@ -8,50 +8,50 @@
         body {
             font-family: Arial, sans-serif;
             text-align: center;
+            background-color: #f4f4f4;
+            margin-top: 50px;
         }
-        table {
-            margin: 20px auto;
-            border-collapse: collapse;
-            width: 80%;
+        h2 {
+            color: #1db954;
         }
-        th, td {
-            border: 1px solid #ddd;
-            padding: 10px;
-            text-align: center;
+        .button-container {
+            margin-top: 20px;
         }
-        th {
-            background-color: #1db954;
+        button {
+            background-color: #1db954;  /* Spotify Green */
             color: white;
+            border: none;
+            padding: 15px 30px;
+            font-size: 18px;
+            cursor: pointer;
+            border-radius: 10px;
+            margin: 10px;
+            transition: background-color 0.3s;
         }
-        img {
-            max-width: 100px;
-            height: auto;
+        button:hover {
+            background-color: #1ed760;  /* Lighter Green on hover */
+        }
+        .back-link {
+            display: inline-block;
+            margin-top: 30px;
+            text-decoration: none;
+            font-size: 16px;
+            color: #1db954;
+        }
+        .back-link:hover {
+            color: #1ed760;
         }
     </style>
 </head>
 <body>
-    <h1>Your Top Tracks</h1>
-    <h2>Time Range: {{ time_range.replace('_', ' ').title() }}</h2>
-    <table>
-        <thead>
-            <tr>
-                <th>Track Name</th>
-                <th>Album</th>
-                <th>Artist(s)</th>
-                <th>Album Cover</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for row in csv_data %}
-            <tr>
-                <td>{{ row[0] }}</td> <!-- Track Name -->
-                <td>{{ row[1] }}</td> <!-- Album -->
-                <td>{{ row[2] }}</td> <!-- Artist(s) -->
-                <td><img src="{{ row[3] }}" alt="Album Cover"></td> <!-- Album Cover -->
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
-    <a href="{{ url_for('home') }}">Go Back</a>
+    <h2>Select Time Range for Top Tracks</h2>
+    <div class="button-container">
+        <form method="POST" action="{{ url_for('stats') }}">
+            <button type="submit" name="time_range" value="short_term">Short Term</button>
+            <button type="submit" name="time_range" value="medium_term">Medium Term</button>
+            <button type="submit" name="time_range" value="long_term">Long Term</button>
+        </form>
+    </div>
+    <a href="{{ url_for('home') }}" class="back-link">Go Back</a>
 </body>
 </html>
