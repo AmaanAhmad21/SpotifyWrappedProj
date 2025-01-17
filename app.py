@@ -66,6 +66,35 @@ def getTrackFeatures(track_ids):
     track_info = [name, album, artist_names, album_cover]
     return track_info
 
+# Define the time ranges
+time_ranges = ['short_term', 'medium_term', 'long_term']
+
+# Function to get the track IDs from the top tracks
+def get_track_ids(top_tracks):
+    return [track['id'] for track in top_tracks['items']]
+
+# Function to insert the track data to Google Sheets
+def insert_to_gsheet(time_range, track_ids):
+    # Convert to DataFrame and update Google Sheets for each time range
+    tracks = []
+    for track_id in track_ids:
+        track = getTrackFeatures(track_id)  # Assuming getTrackFeatures returns track details
+        tracks.append(track)
+
+    df = pd.DataFrame(tracks, columns=["name", "album", "artist_names", "album_cover"])
+
+    # Insert to Google Sheets
+    gc = gspread.service_account(filename="wrappedproj-2e230b153ff5.json")
+    sh = gc.open("WrappedProj")
+    worksheet = sh.worksheet(f"{time_range}")
+    
+    # Resize the sheet to fit the data (optional)
+    worksheet.resize(len(df) + 1, len(df.columns))  # Resize to fit the data
+    
+    # Update the sheet with new data
+    worksheet.update([df.columns.values.tolist()] + df.values.tolist())
+    print(f"Updated Google Sheets for {time_range} with {len(df)} tracks.")
+
 @app.route("/stats", methods=["GET", "POST"])
 def stats():
     user_token = getToken()
@@ -73,44 +102,25 @@ def stats():
         print("No token, redirecting to login...")  # Debugging statement
         return redirect(url_for("login"))
 
-    time_range = request.form.get("time_range", "short_term")  # Default to short_term
     sp = spotipy.Spotify(auth=user_token["access_token"])
-    time.sleep(0.5)
+
+    # Check if the form has been submitted and get the time range selected by the user
+    time_range = request.form.get("time_range", "short_term")  # Default to "short_term" if no selection
+
+    # Fetch the top tracks for the selected time range
     userTopSongs = sp.current_user_top_tracks(
         limit=5, 
         offset=0, 
         time_range=time_range
-        )
+    )
 
-    track_ids = [track["id"] for track in userTopSongs["items"]]
-    def convertToDf(track_ids):
-        tracks = []
-        for i in range(len(track_ids)):
-            time.sleep(0.5)
-            track = getTrackFeatures(track_ids[i])
-            tracks.append(track)
-        
-        df = pd.DataFrame(tracks, columns=["name", "album", "artist", "album_cover"])
-        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-        filename = f"top_tracks_{time_range}_{timestamp}.csv"
-        df.to_csv(filename, index=False)
-        print(f"Data saved to {filename}")  # Debugging statement
-        return filename
+    # Get the track IDs
+    track_ids = get_track_ids(userTopSongs)
     
-    filename = convertToDf(track_ids)
-
-    def dataSheets():
-        gc = gspread.service_account(filename="wrappedproj-2e230b153ff5.json")
-        sh = gc.open("WrappedProj")
-        worksheet = sh.worksheet("short_term")
-        val = worksheet.acell("A3").value
-        print(val)
-
-    dataSheets()
+    # Insert the tracks into Google Sheets for the selected time range
+    insert_to_gsheet(time_range, track_ids)
 
     return render_template(
         "stats.html",
-        tracks=userTopSongs,
-        filename=filename,
         time_range=time_range
     )
