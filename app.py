@@ -63,7 +63,8 @@ def getTrackFeatures(track_ids):
         artists.append(artist["name"])
     artist_names = ", ".join(artists)
     album_cover = meta["album"]["images"][0]["url"]
-    track_info = [name, album, artist_names, album_cover]
+    spotify_url = meta["external_urls"]["spotify"]
+    track_info = [name, album, artist_names, album_cover, spotify_url]
     return track_info
 
 # Function to get the track IDs from the top tracks.
@@ -78,7 +79,7 @@ def insert_to_gsheet(time_range, track_ids):
         track = getTrackFeatures(track_id)  
         tracks.append(track)
 
-    df = pd.DataFrame(tracks, columns=["name", "album", "artist_names", "album_cover"])
+    df = pd.DataFrame(tracks, columns=["name", "album", "artist_names", "album_cover", "spotify_url"])
 
     # Insert to Google Sheets
     gc = gspread.service_account(filename="wrappedproj-2e230b153ff5.json")
