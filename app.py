@@ -110,6 +110,26 @@ def stats():
 
         # Fetch user’s top tracks for the specified time range and limit
         sp = spotipy.Spotify(auth=user_token["access_token"])
+
+        if not time_range:
+            # Update all time ranges
+            time_ranges = ["short_term", "medium_term", "long_term"]
+            for range_option in time_ranges:
+                userTopSongs = sp.current_user_top_tracks(
+                    limit=song_limit,
+                    offset=0,
+                    time_range=range_option
+                )
+                # Get track IDs and update the corresponding sheet
+                track_ids = get_track_ids(userTopSongs)
+                insert_to_gsheet(range_option, track_ids)
+
+            return render_template(
+                "display.html",
+                time_range="all time ranges",
+                song_limit=song_limit
+            )
+
         userTopSongs = sp.current_user_top_tracks(
             limit=song_limit, 
             offset=0, 
