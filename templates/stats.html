@@ -44,24 +44,26 @@
     </style>
 </head>
 <body>
-    <h2>Select Time Range for Top Tracks</h2>
-    <div class="button-container">
-        <form method="POST" action="{{ url_for('stats') }}">
-            <button type="submit" name="time_range" value="short_term">Short Term</button>
-            <button type="submit" name="time_range" value="medium_term">Medium Term</button>
-            <button type="submit" name="time_range" value="long_term">Long Term</button>
-        </form>
-    </div>
-    <h2>Select Number of Songs to Display</h2>
+    <h2>Select Time Range and Song Limit</h2>
     <form method="POST" action="{{ url_for('stats') }}">
-        <label for="song_limit">Choose song limit:</label>
-        <select name="song_limit" id="song_limit">
+        <label for="time_range">Choose Time Range:</label>
+        <div>
+            <input type="radio" id="short_term" name="time_range" value="short_term" required>
+            <label for="short_term">Short Term</label>
+            <input type="radio" id="medium_term" name="time_range" value="medium_term" required>
+            <label for="medium_term">Medium Term</label>
+            <input type="radio" id="long_term" name="time_range" value="long_term" required>
+            <label for="long_term">Long Term</label>
+        </div>
+
+        <label for="song_limit">Number of Songs:</label>
+        <select name="song_limit" id="song_limit" required>
             <option value="5">Top 5</option>
             <option value="10">Top 10</option>
             <option value="25">Top 25</option>
             <option value="50">Top 50</option>
         </select>
-        <br><br>
+        <br>
         <button type="submit">Apply</button>
     </form>
     <a href="{{ url_for('home') }}" class="back-link">Go Back</a>

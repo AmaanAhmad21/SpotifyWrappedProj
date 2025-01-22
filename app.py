@@ -85,39 +85,55 @@ def insert_to_gsheet(time_range, track_ids):
     gc = gspread.service_account(filename="wrappedproj-2e230b153ff5.json")
     sh = gc.open("WrappedProj")
     worksheet = sh.worksheet(f"{time_range}")
-    
+
+    # Clear worksheets current data.
+    worksheet.clear()
+
     # Update the sheet with new data.
     worksheet.update([df.columns.values.tolist()] + df.values.tolist())
     print(f"Updated Google Sheets for {time_range} with {len(df)} tracks.")
 
 @app.route("/stats", methods=["GET", "POST"])
 def stats():
-    user_token = getToken()
-    if not user_token:
-        print("No token, redirecting to login...")  # Debugging statement.
-        return redirect(url_for("login"))
+    if request.method == "GET":
+        # Display the form initially
+        return render_template("stats.html")
 
-    sp = spotipy.Spotify(auth=user_token["access_token"])
+    if request.method == "POST":
+        user_token = getToken()
+        if not user_token:
+            return redirect(url_for("login"))
 
-    # Check if the form has been submitted, and get the time range and song limit selected by the user.
-    time_range = request.form.get("time_range", "short_term")  # Default to "short_term" if no selection.
-    song_limit = request.form.get("song_limit", 5)  # Default to 5 if no selection.
+        # Get the user's selections
+        time_range = request.form.get("time_range")
+        song_limit = int(request.form.get("song_limit", 5))
 
-    # Fetch the top tracks for the selected time range.
-    userTopSongs = sp.current_user_top_tracks(
-        limit=song_limit, 
-        offset=0, 
-        time_range=time_range
-    )
+        # Fetch user’s top tracks for the specified time range and limit
+        sp = spotipy.Spotify(auth=user_token["access_token"])
+        userTopSongs = sp.current_user_top_tracks(
+            limit=song_limit, 
+            offset=0, 
+            time_range=time_range
+            )
 
-    # Get the track IDs
-    track_ids = get_track_ids(userTopSongs)
+        # Extract track IDs and update the Google Sheets
+        track_ids = get_track_ids(userTopSongs)
+        insert_to_gsheet(time_range, track_ids)
+
+        return render_template(
+            "display.html", 
+            time_range=time_range, 
+            song_limit=song_limit
+            )
+
     
-    # Insert the tracks into Google Sheets for the selected time range
-    insert_to_gsheet(time_range, track_ids)
+@app.route("/display")
+def display():
+    # Get the time range and song limit from the query parameters
+    time_range = request.args.get("time_range", "unknown").replace("_", " ").title()
+    song_limit = request.args.get("song_limit", "unknown")
 
     return render_template(
-        "stats.html",
-        time_range=time_range,
-        song_limit=song_limit 
+        "display.html",
+        message=f"Updated Google Sheets for {time_range} with Top {song_limit} songs."
     )
