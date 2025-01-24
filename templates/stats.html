@@ -18,7 +18,7 @@
             margin-top: 20px;
         }
         button {
-            background-color: #1db954;  /* Spotify Green */
+            background-color: #1db954; /* Spotify Green */
             color: white;
             border: none;
             padding: 15px 30px;
@@ -29,7 +29,7 @@
             transition: background-color 0.3s;
         }
         button:hover {
-            background-color: #1ed760;  /* Lighter Green on hover */
+            background-color: #1ed760; /* Lighter Green on hover */
         }
         .back-link {
             display: inline-block;
@@ -41,21 +41,47 @@
         .back-link:hover {
             color: #1ed760;
         }
+        .song {
+            margin: 10px 0;
+        }
     </style>
 </head>
 <body>
-    <h2>Select The Number of songs to Display!</h2>
+    <h2>Your Spotify Stats</h2>
+
+    <!-- Time Range Buttons -->
+    <div class="button-container">
+        <form method="POST" action="{{ url_for('stats') }}">
+            <button type="submit" name="time_range" value="short_term" {% if time_range == 'short_term' %}style="background-color: #1ed760;"{% endif %}>Last Month</button>
+            <button type="submit" name="time_range" value="medium_term" {% if time_range == 'medium_term' %}style="background-color: #1ed760;"{% endif %}>6 Months</button>
+            <button type="submit" name="time_range" value="long_term" {% if time_range == 'long_term' %}style="background-color: #1ed760;"{% endif %}>All Time</button>
+        </form>
+    </div>
+
+    <!-- Song Limit Dropdown -->
     <form method="POST" action="{{ url_for('stats') }}">
         <label for="song_limit">Choose the number of top songs:</label>
-        <select name="song_limit" id="song_limit">
-            <option value="5">Top 5</option>
-            <option value="10">Top 10</option>
-            <option value="25">Top 25</option>
-            <option value="50">Top 50</option>
+        <select name="song_limit" id="song_limit" onchange="this.form.submit()">
+            <option value="5" {% if song_limit == 5 %}selected{% endif %}>Top 5</option>
+            <option value="10" {% if song_limit == 10 %}selected{% endif %}>Top 10</option>
+            <option value="25" {% if song_limit == 25 %}selected{% endif %}>Top 25</option>
+            <option value="50" {% if song_limit == 50 %}selected{% endif %}>Top 50</option>
         </select>
-        <br><br>
-        <button type="submit">Apply</button>
     </form>
-    <a href="{{ url_for('home') }}" class="back-link">Go Back</a>
+
+    <!-- Display Tracks -->
+    <div>
+        <h3>Showing Top {{ song_limit }} Songs ({{ time_range.replace("_", " ").title() }})</h3>
+        {% for track in tracks %}
+        <div class="song">
+            <img src="{{ track.album_cover }}" alt="Album Cover" width="100">
+            <p>
+                <strong>{{ track.name }}</strong><br>
+                {{ track.artist_names }}<br>
+                <a href="{{ track.spotify_url }}" target="_blank">Listen on Spotify</a>
+            </p>
+        </div>
+        {% endfor %}
+    </div>
 </body>
 </html>

@@ -9,12 +9,11 @@ import pandas as pd
 # Load environment variables from .env file.
 load_dotenv()
 
-# Constants
+# Constants.
 CLIENT_ID = os.getenv("SPOTIFY_CLIENT_ID")
 CLIENT_SECRET = os.getenv("SPOTIFY_CLIENT_SECRET")
 TOKEN_INFO = "token_info"
 
-# Set up Flask app
 app = Flask(__name__)
 app.secret_key = os.getenv("SPOTIFY_CLIENT_SECRET")  
 
@@ -67,46 +66,38 @@ def getTrackFeatures(track_ids):
         "spotify_url": spotify_url,
     }
 
-def save_to_csv(time_range, tracks):
-    df = pd.DataFrame(tracks)
-    filename = f"{time_range}_top_tracks.csv"
-    df.to_csv(filename, index=False)
-    print(f"Saved {len(tracks)} tracks to {filename}")
-
 @app.route("/stats", methods=["GET", "POST"])
 def stats():
-    if request.method == "GET":
-        return render_template("stats.html")
+    user_token = getToken()
+    if not user_token:
+        return redirect(url_for("login"))
 
-    if request.method == "POST":
-        user_token = getToken()
-        if not user_token:
-            return redirect(url_for("login"))
+    sp = spotipy.Spotify(auth=user_token["access_token"])
 
-        time_ranges = ["short_term", "medium_term", "long_term"]
-        song_limit = int(request.form.get("song_limit", 5))
-        all_tracks = {}
+    # Default values.
+    default_time_range = "short_term"
+    default_song_limit = 5
 
-        sp = spotipy.Spotify(auth=user_token["access_token"])
+    # Get time range and song limit from user input or use defaults.
+    time_range = request.form.get("time_range", session.get("time_range", default_time_range))
+    song_limit = int(request.form.get("song_limit", session.get("song_limit", default_song_limit)))
 
-        # Fetch top tracks for all time ranges
-        for time_range in time_ranges:
-            userTopSongs = sp.current_user_top_tracks(
-                limit=song_limit,
-                offset=0,
-                time_range=time_range
-            )
-            track_ids = [track["id"] for track in userTopSongs["items"]]
-            tracks = [getTrackFeatures(track_id) for track_id in track_ids]
-            all_tracks[time_range] = tracks
-            save_to_csv(time_range, tracks)
+    # Update session with the current selections.
+    session["time_range"] = time_range
+    session["song_limit"] = song_limit
 
-        return render_template(
-            "display.html",
-            tracks=all_tracks,
-            song_limit=song_limit
-        )
+    # Get top tracks.
+    userTopSongs = sp.current_user_top_tracks(
+        limit=song_limit, 
+        offset=0, 
+        time_range=time_range
+    )
+    track_ids = [track["id"] for track in userTopSongs["items"]]
+    tracks = [getTrackFeatures(track_id) for track_id in track_ids]
 
-@app.route("/display")
-def display():
-    return render_template("display.html")
+    return render_template(
+        "stats.html",
+        tracks=tracks,
+        song_limit=song_limit,
+        time_range=time_range
+    )
