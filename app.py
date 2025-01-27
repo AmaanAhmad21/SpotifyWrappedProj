@@ -5,8 +5,9 @@ from dotenv import load_dotenv
 import os
 import time
 import pandas as pd
-from datetime import datetime
+from datetime import datetime, timedelta
 from dateutil import parser
+import pytz
 
 # Load environment variables from .env file.
 load_dotenv()
@@ -25,7 +26,7 @@ def createSpotifyOAuth():
         client_id=CLIENT_ID,
         client_secret=CLIENT_SECRET,
         redirect_uri=url_for("redirect_page", _external=True),
-        scope="user-top-read"
+        scope="user-top-read user-read-recently-played"
     )
 
 @app.route("/")
@@ -83,15 +84,55 @@ def getArtistFeatures(artist_ids):
         "spotify_url": artist_spotify_url
     }
 
+def convertToDatetime(iso_string):
+    return parser.isoparse(iso_string).astimezone(pytz.utc)
+
+# Function to convert Spotify time range to approximate date range.
+def timeRangeDates(time_range):
+    # Return start and end dates based on the time range.
+    if time_range == "short_term":
+        end_date = datetime.now(pytz.utc)
+        start_date = end_date - timedelta(weeks=4)  # Last 4 weeks.
+    elif time_range == "medium_term":
+        end_date = datetime.now(pytz.utc)
+        start_date = end_date - timedelta(weeks=26)  # Last 6 months.
+    elif time_range == "long_term":
+        end_date = datetime.now(pytz.utc)
+        start_date = end_date - timedelta(weeks=52)  # Last Year.
+    return start_date, end_date
+
+def getRecentTracks(time_range):
+    user_token = getToken()  
+    sp = spotipy.Spotify(auth=user_token["access_token"])
+    
+    # Get the time range dates.
+    time_range_start, time_range_end = timeRangeDates(time_range)
+    
+    # Get recently played tracks.
+    history = sp.current_user_recently_played(limit=50)
+    while history.get('next'):
+        history = sp.next(history) # Paginate if needed.  
+    
+    # Filter the tracks based on time range.
+    recent_tracks = []
+    for play in history["items"]:
+        played_at = convertToDatetime(play["played_at"])  
+        
+        # Check if played_at is within the time range.
+        if time_range_start <= played_at <= time_range_end:
+            recent_tracks.append(play["track"]["name"])  
+    
+    return recent_tracks
+
 @app.before_request
 def reset_session_defaults():
     
     session.clear
 
     if "time_range" not in session:
-        session["time_range"] = "short_term"  # Default value for time range
+        session["time_range"] = "short_term"  # Default value for time range.
     if "result_limit" not in session:
-        session["result_limit"] = 5  # Default value for result limit
+        session["result_limit"] = 5  # Default value for result limit.
 
 @app.route("/stats", methods=["GET", "POST"])
 def stats():
@@ -138,6 +179,8 @@ def stats():
     artist_ids = [artist["id"] for artist in userTopArtists["items"]]
     tracks = [getTrackFeatures(track_id) for track_id in track_ids]
     artists = [getArtistFeatures(artist_id) for artist_id in artist_ids]
+    recent_tracks = getRecentTracks(time_range)
+    print(recent_tracks)
 
 
     return render_template(
@@ -145,5 +188,5 @@ def stats():
         tracks=tracks,
         artists = artists, 
         song_limit=result_limit,
-        time_range=time_range
+        time_range=time_range,
     )

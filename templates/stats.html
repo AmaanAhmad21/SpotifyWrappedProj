@@ -79,10 +79,15 @@
         <div class="track">
             <img src="{{ track.album_cover }}" alt="Album Cover" width="100">
             <p><strong>{{ track.name }}</strong><br>{{ track.artist_names }}<br>
+            <p><strong>Play Count:</strong></p>
+            <pre>{{ track_play_counts }}</pre>
             <a href="{{ track.spotify_url }}" target="_blank">Listen on Spotify</a></p>
         </div>
         {% endfor %}
     </div>
+
+    <!-- Display Play Counts for Each Track -->
+
 
     <!-- Top Artists -->
     <h3>Top {{ song_limit }} Artists ({{ time_range.replace('_', ' ').title() }})</h3>
