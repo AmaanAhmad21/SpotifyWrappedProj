@@ -101,33 +101,51 @@ def timeRangeDates(time_range):
         start_date = end_date - timedelta(weeks=52)  # Last Year.
     return start_date, end_date
 
-def getRecentTracks(time_range):
+def getRecentTracks(time_range, track_ids):
     user_token = getToken()  
     sp = spotipy.Spotify(auth=user_token["access_token"])
     
-    # Get the time range dates.
     time_range_start, time_range_end = timeRangeDates(time_range)
+    after_timestamp = int(time_range_start.timestamp() * 1000)  # Convert to milliseconds
     
-    # Get recently played tracks.
-    history = sp.current_user_recently_played(limit=50)
-    while history.get('next'):
-        history = sp.next(history) # Paginate if needed.  
-    
-    # Filter the tracks based on time range.
-    recent_tracks = []
-    for play in history["items"]:
-        played_at = convertToDatetime(play["played_at"])  
+    track_count = {track_id: 0 for track_id in track_ids}  # Dictionary to store play counts
+    more_tracks = True
+
+    while more_tracks:
+        # Fetch recently played tracks with the `after` parameter.
+        history = sp.current_user_recently_played(limit=50, after=after_timestamp)
         
-        # Check if played_at is within the time range.
-        if time_range_start <= played_at <= time_range_end:
-            recent_tracks.append(play["track"]["name"])  
-    
-    return recent_tracks
+        if not history["items"]:
+            break  # No more tracks to fetch
+        
+        for play in history["items"]:
+            played_at = convertToDatetime(play["played_at"])  
+
+            # Debugging: print the track details.
+            print(f"Track Name: {play['track']['name']}")
+            
+            # Stop fetching if we've passed the time range
+            if played_at > time_range_end:
+                more_tracks = False
+                break
+            
+            track_id = play["track"]["id"]
+            
+            # Check if the track is in the top tracks list
+            if track_id in track_ids:
+                track_count[track_id] += 1  # Increment the play count for the track
+
+        # Update the `after` timestamp for pagination.
+        if "next" not in history or not history["next"]:
+            break
+
+    return track_count
 
 @app.before_request
 def reset_session_defaults():
     
-    session.clear
+    session.pop("time_range", None)
+    session.pop("result_limit", None)
 
     if "time_range" not in session:
         session["time_range"] = "short_term"  # Default value for time range.
@@ -179,9 +197,18 @@ def stats():
     artist_ids = [artist["id"] for artist in userTopArtists["items"]]
     tracks = [getTrackFeatures(track_id) for track_id in track_ids]
     artists = [getArtistFeatures(artist_id) for artist_id in artist_ids]
-    recent_tracks = getRecentTracks(time_range)
-    print(recent_tracks)
 
+     # Get the count of how many times each of the top tracks was played.
+    track_play_counts = getRecentTracks(time_range, track_ids)
+
+    track_list = []
+    for track in userTopSongs["items"]:
+        track_data = {
+            "name": track["name"],
+            "artist": track["artists"][0]["name"],
+            "play_count": track_play_counts.get(track["id"], 0)
+        }
+        track_list.append(track_data)
 
     return render_template(
         "stats.html",
@@ -189,4 +216,5 @@ def stats():
         artists = artists, 
         song_limit=result_limit,
         time_range=time_range,
+        track_list = track_list
     )
