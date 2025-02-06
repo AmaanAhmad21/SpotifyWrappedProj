@@ -31,6 +31,10 @@ def createSpotifyOAuth():
 
 @app.route("/")
 def home():
+    # Reset session to defaults
+    session.clear()
+    session["time_range"] = "short_term"
+    session["result_limit"] = 5
     return render_template("index.html")
 
 @app.route("/login")
@@ -84,74 +88,6 @@ def getArtistFeatures(artist_ids):
         "spotify_url": artist_spotify_url
     }
 
-def convertToDatetime(iso_string):
-    return parser.isoparse(iso_string).astimezone(pytz.utc)
-
-# Function to convert Spotify time range to approximate date range.
-def timeRangeDates(time_range):
-    # Return start and end dates based on the time range.
-    if time_range == "short_term":
-        end_date = datetime.now(pytz.utc)
-        start_date = end_date - timedelta(weeks=4)  # Last 4 weeks.
-    elif time_range == "medium_term":
-        end_date = datetime.now(pytz.utc)
-        start_date = end_date - timedelta(weeks=26)  # Last 6 months.
-    elif time_range == "long_term":
-        end_date = datetime.now(pytz.utc)
-        start_date = end_date - timedelta(weeks=52)  # Last Year.
-    return start_date, end_date
-
-def getRecentTracks(time_range, track_ids):
-    user_token = getToken()  
-    sp = spotipy.Spotify(auth=user_token["access_token"])
-    
-    time_range_start, time_range_end = timeRangeDates(time_range)
-    after_timestamp = int(time_range_start.timestamp() * 1000)  # Convert to milliseconds
-    
-    track_count = {track_id: 0 for track_id in track_ids}  # Dictionary to store play counts
-    more_tracks = True
-
-    while more_tracks:
-        # Fetch recently played tracks with the `after` parameter.
-        history = sp.current_user_recently_played(limit=50, after=after_timestamp)
-        
-        if not history["items"]:
-            break  # No more tracks to fetch
-        
-        for play in history["items"]:
-            played_at = convertToDatetime(play["played_at"])  
-
-            # Debugging: print the track details.
-            print(f"Track Name: {play['track']['name']}")
-            
-            # Stop fetching if we've passed the time range
-            if played_at > time_range_end:
-                more_tracks = False
-                break
-            
-            track_id = play["track"]["id"]
-            
-            # Check if the track is in the top tracks list
-            if track_id in track_ids:
-                track_count[track_id] += 1  # Increment the play count for the track
-
-        # Update the `after` timestamp for pagination.
-        if "next" not in history or not history["next"]:
-            break
-
-    return track_count
-
-@app.before_request
-def reset_session_defaults():
-    
-    session.pop("time_range", None)
-    session.pop("result_limit", None)
-
-    if "time_range" not in session:
-        session["time_range"] = "short_term"  # Default value for time range.
-    if "result_limit" not in session:
-        session["result_limit"] = 5  # Default value for result limit.
-
 @app.route("/stats", methods=["GET", "POST"])
 def stats():
     user_token = getToken()
@@ -160,28 +96,23 @@ def stats():
 
     sp = spotipy.Spotify(auth=user_token["access_token"])
 
+    # Get current values, with defaults if not set
     time_range = session.get("time_range", "short_term")
     result_limit = session.get("result_limit", 5)
 
-    # Override session values if form data is provided.
+    # Handle form submissions
     if request.method == "POST":
-        # Update the time range if provided in the form.
+        # Update time range if provided
         if "time_range" in request.form:
-            session["time_range"] = request.form["time_range"]
-            time_range = session["time_range"]
-        # Update the result limit if provided in the form.
+            time_range = request.form["time_range"]
+            session["time_range"] = time_range
+        
+        # Update result limit if provided
         if "result_limit" in request.form:
-            session["result_limit"] = int(request.form["result_limit"])
-            result_limit = session["result_limit"]
-    
-    userTopSongs = sp.current_user_top_tracks(limit=result_limit, offset=0, time_range=time_range)
-    userTopArtists = sp.current_user_top_artists(limit=result_limit, offset=0, time_range=time_range)
+            result_limit = int(request.form["result_limit"])
+            session["result_limit"] = result_limit
 
-    # Update session with the current selections.
-    session["time_range"] = time_range
-    session["result_limit"] = result_limit
-
-    # Get top tracks.
+    # Get top tracks and artists
     userTopSongs = sp.current_user_top_tracks(
         limit=result_limit, 
         offset=0, 
@@ -198,23 +129,10 @@ def stats():
     tracks = [getTrackFeatures(track_id) for track_id in track_ids]
     artists = [getArtistFeatures(artist_id) for artist_id in artist_ids]
 
-     # Get the count of how many times each of the top tracks was played.
-    track_play_counts = getRecentTracks(time_range, track_ids)
-
-    track_list = []
-    for track in userTopSongs["items"]:
-        track_data = {
-            "name": track["name"],
-            "artist": track["artists"][0]["name"],
-            "play_count": track_play_counts.get(track["id"], 0)
-        }
-        track_list.append(track_data)
-
     return render_template(
         "stats.html",
         tracks=tracks,
-        artists = artists, 
+        artists=artists, 
         song_limit=result_limit,
         time_range=time_range,
-        track_list = track_list
     )

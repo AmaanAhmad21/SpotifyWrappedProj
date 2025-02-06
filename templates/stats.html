@@ -56,7 +56,7 @@
     <div class="button-container">
         <form method="POST" action="{{ url_for('stats') }}">
             <button type="submit" name="time_range" value="short_term" {% if time_range == 'short_term' %}style="background-color: #1ed760;"{% endif %}>Last Month</button>
-            <button type="submit" name="time_range" value="medium_term" {% if time_range == 'medium_term' %}style="background-color: #1ed760;"{% endif %}>6 Months</button>
+            <button type="submit" name="time_range" value="medium_term" {% if time_range == 'medium_term' %}style="background-color: #1ed760;"{% endif %}>Last 6 Months</button>
             <button type="submit" name="time_range" value="long_term" {% if time_range == 'long_term' %}style="background-color: #1ed760;"{% endif %}>Last Year</button>
         </form>
     </div>
@@ -75,11 +75,10 @@
     <!-- Top Tracks -->
     <h3>Top {{ song_limit }} Tracks ({{ time_range.replace('_', ' ').title() }})</h3>
     <div>
-        {% for track in tracks, track_play_counts %}
+        {% for track in tracks %}
         <div class="track">
             <img src="{{ track.album_cover }}" alt="Album Cover" width="100">
             <p><strong>{{ track.name }}</strong><br>{{ track.artist_names }}<br>
-            <p><strong>Play Count:</strong> {{ track.play_count }}</p>
             <a href="{{ track.spotify_url }}" target="_blank">Listen on Spotify</a></p>
         </div>
         {% endfor %}
