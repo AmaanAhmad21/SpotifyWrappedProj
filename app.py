@@ -26,7 +26,7 @@ def createSpotifyOAuth():
         client_id=CLIENT_ID,
         client_secret=CLIENT_SECRET,
         redirect_uri=url_for("redirect_page", _external=True),
-        scope="user-top-read user-read-recently-played"
+        scope="user-top-read user-read-private user-read-email"
     )
 
 @app.route("/")
@@ -54,6 +54,23 @@ def redirect_page():
 def getToken():
     token_info = session.get(TOKEN_INFO, None)
     return token_info
+
+def getUserDetails():
+    user_token = getToken()
+    if not user_token:
+        return None
+    
+    sp = spotipy.Spotify(auth=user_token["access_token"])
+    try:
+        user_profile = sp.current_user()
+        return {
+            'display_name': user_profile['display_name'],
+            'profile_image': user_profile['images'][0]['url'] if user_profile['images'] else None,
+            'email': user_profile.get('email'),
+        }
+    except:
+        return None
+
 
 def getTrackFeatures(track_ids):
     user_token = getToken()
@@ -96,6 +113,10 @@ def stats():
 
     sp = spotipy.Spotify(auth=user_token["access_token"])
 
+    user_profile = getUserDetails()
+    if not user_profile:
+        return redirect(url_for("login"))
+
     # Get current values, with defaults if not set
     time_range = session.get("time_range", "short_term")
     result_limit = session.get("result_limit", 5)
@@ -135,4 +156,5 @@ def stats():
         artists=artists, 
         song_limit=result_limit,
         time_range=time_range,
+        user=user_profile
     )

@@ -47,9 +47,42 @@
             text-decoration: none;
             color: #1db954;
         }
+        /* New styles for user profile */
+        .user-profile {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background-color: white;
+            padding: 10px;
+            border-radius: 10px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .profile-picture {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            object-fit: cover;
+            border: 2px solid #1db954;
+        }
+        .user-profile h2 {
+            margin: 0;
+            font-size: 14px;
+            color: #333;
+        }
     </style>
 </head>
 <body>
+    <!-- Move user profile to top -->
+    <div class="user-profile">
+        {% if user.profile_image %}
+            <img src="{{ user.profile_image }}" alt="Profile Picture" class="profile-picture">
+        {% endif %}
+        <h2>{{ user.display_name }}</h2>
+    </div>
+
     <h2>Your Spotify Stats</h2>
 
     <!-- Time Range Buttons -->
@@ -83,9 +116,6 @@
         </div>
         {% endfor %}
     </div>
-
-    <!-- Display Play Counts for Each Track -->
-
 
     <!-- Top Artists -->
     <h3>Top {{ song_limit }} Artists ({{ time_range.replace('_', ' ').title() }})</h3>
