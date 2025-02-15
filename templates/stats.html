@@ -30,6 +30,10 @@
         button:hover {
             background-color: #1ed760;
         }
+        button:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
         .track, .artist {
             margin: 15px 0;
             padding: 10px;
@@ -38,16 +42,19 @@
             display: inline-block;
             text-align: left;
             width: 300px;
+            background-color: white;
         }
         .track img, .artist img {
             border-radius: 5px;
+            width: 100px;
+            height: 100px;
+            object-fit: cover;
         }
         .back-link {
             margin-top: 30px;
             text-decoration: none;
             color: #1db954;
         }
-        /* New styles for user profile */
         .user-profile {
             position: fixed;
             top: 20px;
@@ -59,6 +66,7 @@
             display: flex;
             align-items: center;
             gap: 10px;
+            z-index: 1000;
         }
         .profile-picture {
             width: 40px;
@@ -72,10 +80,43 @@
             font-size: 14px;
             color: #333;
         }
+        .recommendations {
+            max-width: 800px;
+            margin: 20px auto;
+            padding: 20px;
+            background-color: white;
+            border-radius: 10px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        .error {
+            color: #dc3545;
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 5px;
+            background-color: #ffe6e6;
+        }
+        .loading {
+            color: #666;
+            font-style: italic;
+        }
+        select {
+            padding: 8px;
+            border-radius: 5px;
+            border: 1px solid #ddd;
+            margin: 10px;
+            cursor: pointer;
+        }
+        a {
+            color: #1db954;
+            text-decoration: none;
+            transition: color 0.3s;
+        }
+        a:hover {
+            color: #1ed760;
+        }
     </style>
 </head>
 <body>
-    <!-- Move user profile to top -->
     <div class="user-profile">
         {% if user.profile_image %}
             <img src="{{ user.profile_image }}" alt="Profile Picture" class="profile-picture">
@@ -85,7 +126,6 @@
 
     <h2>Your Spotify Stats</h2>
 
-    <!-- Time Range Buttons -->
     <div class="button-container">
         <form method="POST" action="{{ url_for('stats') }}">
             <button type="submit" name="time_range" value="short_term" {% if time_range == 'short_term' %}style="background-color: #1ed760;"{% endif %}>Last Month</button>
@@ -94,7 +134,6 @@
         </form>
     </div>
 
-    <!-- Song Limit Dropdown -->
     <form method="POST" action="{{ url_for('stats') }}">
         <label for="result_limit">Number of Results:</label>
         <select name="result_limit" id="result_limit" onchange="this.form.submit()">
@@ -105,28 +144,107 @@
         </select>
     </form>
 
-    <!-- Top Tracks -->
     <h3>Top {{ song_limit }} Tracks ({{ time_range.replace('_', ' ').title() }})</h3>
     <div>
         {% for track in tracks %}
         <div class="track">
-            <img src="{{ track.album_cover }}" alt="Album Cover" width="100">
-            <p><strong>{{ track.name }}</strong><br>{{ track.artist_names }}<br>
-            <a href="{{ track.spotify_url }}" target="_blank">Listen on Spotify</a></p>
+            <img src="{{ track.album_cover }}" alt="Album Cover">
+            <p>
+                <strong>{{ track.name }}</strong><br>
+                {{ track.artist_names }}<br>
+                <a href="{{ track.spotify_url }}" target="_blank">Listen on Spotify</a>
+            </p>
         </div>
         {% endfor %}
     </div>
 
-    <!-- Top Artists -->
     <h3>Top {{ song_limit }} Artists ({{ time_range.replace('_', ' ').title() }})</h3>
     <div>
         {% for artist in artists %}
         <div class="artist">
-            <img src="{{ artist.url }}" alt="Artist Image" width="100">
-            <p><strong>{{ artist.name }}</strong><br>
-            <a href="{{ artist.spotify_url }}" target="_blank">Visit on Spotify</a></p>
+            <img src="{{ artist.url }}" alt="Artist Image">
+            <p>
+                <strong>{{ artist.name }}</strong><br>
+                <a href="{{ artist.spotify_url }}" target="_blank">Visit on Spotify</a>
+            </p>
         </div>
         {% endfor %}
     </div>
+
+    <button id="getSuggestions">Get Similar Suggestions</button>
+    <div id="recommendations" class="recommendations">
+        <div id="recommendationsContent"></div>
+    </div>
+    
+    <script>
+    document.getElementById("getSuggestions").addEventListener("click", function() {
+        const button = this;
+        const recommendationsDiv = document.getElementById("recommendationsContent");
+        
+        button.disabled = true;
+        recommendationsDiv.innerHTML = "<p class='loading'>Finding similar music you might enjoy...</p>";
+        
+        fetch("/get_recommendations", {
+            method: "POST",
+            headers: {
+                'Content-Type': 'application/json',
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.error) throw new Error(data.error);
+            
+            let html = '';
+            
+            // Check if we have songs
+            if (data.songs && data.songs.length > 0) {
+                html += "<h3>Recommended Songs</h3>";
+                data.songs.forEach(track => {
+                    html += `
+                        <div class="track">
+                            <img src="${track.album_cover}" alt="Album Cover">
+                            <p>
+                                <strong>${track.name}</strong><br>
+                                ${track.artist}<br>
+                                <em>${track.album}</em><br>
+                                <a href="${track.spotify_url}" target="_blank">Listen on Spotify</a>
+                                ${track.preview_url ? `<br><audio controls src="${track.preview_url}"></audio>` : ''}
+                            </p>
+                        </div>
+                    `;
+                });
+            }
+    
+            // Check if we have artists
+            if (data.artists && data.artists.length > 0) {
+                html += "<h3>Recommended Artists</h3>";
+                data.artists.forEach(artist => {
+                    html += `
+                        <div class="artist">
+                            <img src="${artist.image_url}" alt="${artist.name}">
+                            <p>
+                                <strong>${artist.name}</strong><br>
+                                <a href="${artist.spotify_url}" target="_blank">Visit on Spotify</a>
+                            </p>
+                        </div>
+                    `;
+                });
+            }
+    
+            if (!html) {
+                html = "<p>No recommendations found</p>";
+            }
+            
+            recommendationsDiv.innerHTML = html;
+        })
+        .catch(error => {
+            recommendationsDiv.innerHTML = `<p class='error'>Error getting recommendations: ${error.message}</p>`;
+            console.error('Error:', error);
+        })
+        .finally(() => {
+            button.disabled = false;
+        });
+    });
+    </script>
 </body>
 </html>

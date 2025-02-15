@@ -1,13 +1,12 @@
-from flask import Flask, request, url_for, session, redirect, render_template
+from flask import Flask, request, url_for, session, redirect, render_template, jsonify
 import spotipy
 from spotipy.oauth2 import SpotifyOAuth
 from dotenv import load_dotenv
 import os
 import time
-import pandas as pd
-from datetime import datetime, timedelta
-from dateutil import parser
-import pytz
+from openai import OpenAI
+import json
+import requests
 
 # Load environment variables from .env file.
 load_dotenv()
@@ -16,6 +15,8 @@ load_dotenv()
 CLIENT_ID = os.getenv("SPOTIFY_CLIENT_ID")
 CLIENT_SECRET = os.getenv("SPOTIFY_CLIENT_SECRET")
 TOKEN_INFO = "token_info"
+OpenAI.api_key = os.getenv("OPENAI_API_KEY")
+
 
 app = Flask(__name__)
 app.secret_key = os.getenv("SPOTIFY_CLIENT_SECRET")  
@@ -158,3 +159,215 @@ def stats():
         time_range=time_range,
         user=user_profile
     )
+
+@app.route("/get_recommendations", methods=["POST"])
+def get_recommendations():
+    try:
+        token_info = getToken()
+        if not token_info:
+            return jsonify({"error": "No Spotify token found"}), 401
+        
+        sp = spotipy.Spotify(auth=token_info['access_token'])
+        
+        time_range = session.get("time_range", "short_term")
+        result_limit = session.get("result_limit", 5)
+        
+        # Get user's current top tracks and artists
+        top_tracks = sp.current_user_top_tracks(limit=result_limit, time_range=time_range)
+        top_artists = sp.current_user_top_artists(limit=result_limit, time_range=time_range)
+        
+        top_track_names = [
+            f"{track['name']} - {track['artists'][0]['name']}" 
+            for track in top_tracks['items']
+        ]
+        top_artist_names = [
+            artist['name'] 
+            for artist in top_artists['items']
+        ]
+        
+        recommended_songs, recommended_artists = get_similar_recommendations(
+            top_track_names, 
+            top_artist_names, 
+            result_limit
+        )
+        
+        # Look up songs with more flexible search
+        enriched_songs = []
+        failed_songs = []
+        for rec in recommended_songs:
+            try:
+                if '-' not in rec:
+                    continue
+                song_name, artist_name = [x.strip() for x in rec.split('-', 1)]
+                print(f"Looking up song: {song_name} by {artist_name}")
+                
+                # Try exact search first
+                results = sp.search(q=f"track:{song_name} artist:{artist_name}", type='track', limit=1)
+                
+                # If no results, try a more lenient search
+                if not results['tracks']['items']:
+                    print(f"No exact match found, trying broader search for: {song_name}")
+                    results = sp.search(q=f"{song_name} {artist_name}", type='track', limit=1)
+                
+                if results['tracks']['items']:
+                    track = results['tracks']['items'][0]
+                    # Verify the match is reasonably close
+                    if (track['name'].lower().replace(' ', '') in song_name.lower().replace(' ', '') or 
+                        song_name.lower().replace(' ', '') in track['name'].lower().replace(' ', '')):
+                        enriched_songs.append({
+                            "name": track['name'],
+                            "artist": track['artists'][0]['name'],
+                            "album_cover": track['album']['images'][0]['url'] if track['album']['images'] else None,
+                            "spotify_url": track['external_urls']['spotify'],
+                            "preview_url": track.get('preview_url'),
+                            "album": track['album']['name']
+                        })
+                    else:
+                        failed_songs.append(f"{song_name} - {artist_name}")
+                else:
+                    failed_songs.append(f"{song_name} - {artist_name}")
+            except Exception as e:
+                print(f"Error processing song {rec}: {str(e)}")
+                failed_songs.append(rec)
+                continue
+
+        # Look up artists
+        enriched_artists = []
+        failed_artists = []
+        for artist_name in recommended_artists:
+            try:
+                print(f"Looking up artist: {artist_name}")
+                results = sp.search(q=artist_name, type='artist', limit=1)
+                
+                if results['artists']['items']:
+                    artist = results['artists']['items'][0]
+                    enriched_artists.append({
+                        "name": artist['name'],
+                        "image_url": artist['images'][0]['url'] if artist['images'] else None,
+                        "spotify_url": artist['external_urls']['spotify'],
+                    })
+                else:
+                    failed_artists.append(artist_name)
+            except Exception as e:
+                print(f"Error processing artist {artist_name}: {str(e)}")
+                failed_artists.append(artist_name)
+                continue
+        
+        print(f"Failed to find songs: {failed_songs}")  # Debug print
+        print(f"Failed to find artists: {failed_artists}")  # Debug print
+        
+        # If we didn't get enough songs, try getting more recommendations
+        if len(enriched_songs) < result_limit:
+            print(f"Only found {len(enriched_songs)} songs, requesting more recommendations")
+            # Increase the request limit to compensate for failed lookups
+            additional_songs, _ = get_similar_recommendations(
+                top_track_names,
+                top_artist_names,
+                result_limit + len(failed_songs)
+            )
+            
+            # Try to find the additional songs
+            for rec in additional_songs:
+                if len(enriched_songs) >= result_limit:
+                    break
+                    
+                try:
+                    song_name, artist_name = [x.strip() for x in rec.split('-', 1)]
+                    results = sp.search(q=f"{song_name} {artist_name}", type='track', limit=1)
+                    
+                    if results['tracks']['items']:
+                        track = results['tracks']['items'][0]
+                        if not any(s['name'] == track['name'] and s['artist'] == track['artists'][0]['name'] 
+                                 for s in enriched_songs):
+                            enriched_songs.append({
+                                "name": track['name'],
+                                "artist": track['artists'][0]['name'],
+                                "album_cover": track['album']['images'][0]['url'] if track['album']['images'] else None,
+                                "spotify_url": track['external_urls']['spotify'],
+                                "preview_url": track.get('preview_url'),
+                                "album": track['album']['name']
+                            })
+                except Exception as e:
+                    print(f"Error processing additional song {rec}: {str(e)}")
+                    continue
+        
+        return jsonify({
+            "songs": enriched_songs,
+            "artists": enriched_artists
+        })
+        
+    except Exception as e:
+        print(f"Error in get_recommendations: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+
+def get_similar_recommendations(top_songs, top_artists, song_limit):
+    if not top_songs or not top_artists:
+        print("No top songs or artists provided")  # Debug print
+        return [], []
+
+    prompt = f"""
+    Based on these songs and artists:
+    Songs: {', '.join(top_songs)}
+    Artists: {', '.join(top_artists)}
+
+    Please provide:
+    1. Exactly {song_limit} similar songs in the format "Song Name - Artist Name"
+    2. Exactly {song_limit} similar artists
+
+    Format your response exactly like this:
+    Songs:
+    1. Song Name - Artist Name
+    2. Song Name - Artist Name
+    (etc.)
+
+    Artists:
+    1. Artist Name
+    2. Artist Name
+    (etc.)
+    """
+
+    print("Sending prompt to GPT:", prompt)  # Debug print
+
+    client = OpenAI()
+    response = client.chat.completions.create(
+        model="gpt-3.5-turbo",
+        messages=[
+            {
+                "role": "system", 
+                "content": "You are a music recommendation assistant. Always format your response with 'Songs:' and 'Artists:' sections."
+            },
+            {"role": "user", "content": prompt}
+        ],
+        temperature=0.7
+    )
+
+    content = response.choices[0].message.content
+    print("GPT response:", content)  # Debug print
+    
+    # Split response into songs and artists
+    songs = []
+    artists = []
+    current_section = None
+    
+    for line in content.split('\n'):
+        line = line.strip()
+        if 'Songs:' in line:
+            current_section = 'songs'
+            continue
+        elif 'Artists:' in line:
+            current_section = 'artists'
+            continue
+            
+        # Remove numbering and clean up the line
+        line = line.lstrip('123456789. ')
+        
+        if line:
+            if current_section == 'songs' and '-' in line:
+                songs.append(line)
+            elif current_section == 'artists' and not '-' in line:
+                artists.append(line)
+
+    print("Parsed songs:", songs)  # Debug print
+    print("Parsed artists:", artists)  # Debug print
+    
+    return songs, artists
