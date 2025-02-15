@@ -314,6 +314,8 @@ def get_similar_recommendations(top_songs, top_artists, song_limit):
     1. Exactly {song_limit} similar songs in the format "Song Name - Artist Name"
     2. Exactly {song_limit} similar artists
 
+    but make sure not to suggest artists or songs that are already mentioned.
+
     Format your response exactly like this:
     Songs:
     1. Song Name - Artist Name
