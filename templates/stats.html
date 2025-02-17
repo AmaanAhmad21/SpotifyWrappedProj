@@ -8,15 +8,23 @@
         body {
             font-family: Arial, sans-serif;
             text-align: center;
-            background-color: #f4f4f4;
+            background-color: #121212;
+            color: white;
             margin-top: 50px;
         }
+
         h2 {
             color: #1db954;
         }
+
+        h3 {
+            color: white;
+        }
+
         .button-container {
             margin-top: 20px;
         }
+
         button {
             background-color: #1db954;
             color: white;
@@ -25,104 +33,171 @@
             margin: 5px;
             cursor: pointer;
             border-radius: 5px;
-            transition: background-color 0.3s;
+            transition: all 0.3s;
         }
+
         button:hover {
             background-color: #1ed760;
+            transform: scale(1.05);
         }
+
         button:disabled {
-            background-color: #cccccc;
+            background-color: #333;
             cursor: not-allowed;
         }
+
         .track, .artist {
             margin: 15px 0;
-            padding: 10px;
-            border: 1px solid #ddd;
+            padding: 15px;
             border-radius: 10px;
             display: inline-block;
             text-align: left;
             width: 300px;
-            background-color: white;
+            background-color: #282828;
+            transition: all 0.3s ease;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.3);
         }
+
+        .track:hover, .artist:hover {
+            background-color: #333333;
+            transform: translateY(-5px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+        }
+
         .track img, .artist img {
-            border-radius: 5px;
+            border-radius: 8px;
             width: 100px;
             height: 100px;
             object-fit: cover;
+            border: 2px solid #1db954;
+            transition: all 0.3s ease;
         }
+
+        .track:hover img, .artist:hover img {
+            border-color: #1ed760;
+            transform: scale(1.05);
+        }
+
         .back-link {
             margin-top: 30px;
             text-decoration: none;
             color: #1db954;
         }
+
         .user-profile {
             position: fixed;
             top: 20px;
             right: 20px;
-            background-color: white;
+            background-color: #282828;
             padding: 10px;
             border-radius: 10px;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            box-shadow: 0 2px 5px rgba(0,0,0,0.3);
             display: flex;
             align-items: center;
             gap: 10px;
             z-index: 1000;
+            text-decoration: none;
+            transition: all 0.3s ease;
+            cursor: pointer;
         }
+
+        .user-profile:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+            background-color: #333333;
+        }
+
         .profile-picture {
             width: 40px;
             height: 40px;
             border-radius: 50%;
             object-fit: cover;
             border: 2px solid #1db954;
+            transition: border-color 0.3s ease;
         }
+
+        .user-profile:hover .profile-picture {
+            border-color: #1ed760;
+        }
+
         .user-profile h2 {
             margin: 0;
             font-size: 14px;
-            color: #333;
+            color: white;
+            transition: color 0.3s ease;
         }
+
+        .user-profile:hover h2 {
+            color: #1db954;
+        }
+
         .recommendations {
             max-width: 800px;
             margin: 20px auto;
             padding: 20px;
-            background-color: white;
+            background-color: #282828;
             border-radius: 10px;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            box-shadow: 0 2px 8px rgba(0,0,0,0.3);
         }
+
         .error {
-            color: #dc3545;
+            color: #ff4444;
             padding: 10px;
             margin: 10px 0;
             border-radius: 5px;
-            background-color: #ffe6e6;
+            background-color: rgba(255, 68, 68, 0.1);
         }
+
         .loading {
-            color: #666;
+            color: #888;
             font-style: italic;
         }
+
         select {
             padding: 8px;
             border-radius: 5px;
-            border: 1px solid #ddd;
+            border: 1px solid #1db954;
             margin: 10px;
             cursor: pointer;
+            background-color: #282828;
+            color: white;
+            transition: all 0.3s;
         }
+
+        select:hover {
+            border-color: #1ed760;
+            background-color: #333333;
+        }
+
         a {
             color: #1db954;
             text-decoration: none;
             transition: color 0.3s;
         }
+
         a:hover {
+            color: #1ed760;
+        }
+
+        .spotify-link {
+            color: #1db954;
+            text-decoration: none;
+            transition: color 0.3s;
+        }
+
+        .spotify-link:hover {
             color: #1ed760;
         }
     </style>
 </head>
 <body>
-    <div class="user-profile">
+    <a href="{{ user.spotify_url }}" target="_blank" class="user-profile">
         {% if user.profile_image %}
             <img src="{{ user.profile_image }}" alt="Profile Picture" class="profile-picture">
         {% endif %}
         <h2>{{ user.display_name }}</h2>
-    </div>
+        <span class="spotify-link"></span>
+    </a>
 
     <h2>Your Spotify Stats</h2>
 
