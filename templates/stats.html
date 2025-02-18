@@ -46,11 +46,16 @@
             cursor: not-allowed;
         }
 
-        .track, .artist {
+        .track-link, .artist-link {
+            text-decoration: none;
+            color: inherit;
+            display: inline-block;
             margin: 15px 0;
+        }
+
+        .track, .artist {
             padding: 15px;
             border-radius: 10px;
-            display: inline-block;
             text-align: left;
             width: 300px;
             background-color: #282828;
@@ -58,7 +63,8 @@
             box-shadow: 0 2px 8px rgba(0,0,0,0.3);
         }
 
-        .track:hover, .artist:hover {
+        .track-link:hover .track, 
+        .artist-link:hover .artist {
             background-color: #333333;
             transform: translateY(-5px);
             box-shadow: 0 4px 12px rgba(0,0,0,0.4);
@@ -73,7 +79,8 @@
             transition: all 0.3s ease;
         }
 
-        .track:hover img, .artist:hover img {
+        .track-link:hover .track img, 
+        .artist-link:hover .artist img {
             border-color: #1ed760;
             transform: scale(1.05);
         }
@@ -199,7 +206,7 @@
         <span class="spotify-link"></span>
     </a>
 
-    <h2>Your Spotify Stats</h2>
+    <h2>Your REAL Spotify Stats</h2>
 
     <div class="button-container">
         <form method="POST" action="{{ url_for('stats') }}">
@@ -222,27 +229,29 @@
     <h3>Top {{ song_limit }} Tracks ({{ time_range.replace('_', ' ').title() }})</h3>
     <div>
         {% for track in tracks %}
-        <div class="track">
-            <img src="{{ track.album_cover }}" alt="Album Cover">
-            <p>
-                <strong>{{ track.name }}</strong><br>
-                {{ track.artist_names }}<br>
-                <a href="{{ track.spotify_url }}" target="_blank">Listen on Spotify</a>
-            </p>
-        </div>
+        <a href="{{ track.spotify_url }}" target="_blank" class="track-link">
+            <div class="track">
+                <img src="{{ track.album_cover }}" alt="Album Cover">
+                <p>
+                    <strong>{{ track.name }}</strong><br>
+                    {{ track.artist_names }}<br>
+                </p>
+            </div>
+        </a>
         {% endfor %}
     </div>
 
     <h3>Top {{ song_limit }} Artists ({{ time_range.replace('_', ' ').title() }})</h3>
     <div>
         {% for artist in artists %}
-        <div class="artist">
-            <img src="{{ artist.url }}" alt="Artist Image">
-            <p>
-                <strong>{{ artist.name }}</strong><br>
-                <a href="{{ artist.spotify_url }}" target="_blank">Visit on Spotify</a>
-            </p>
-        </div>
+        <a href="{{ artist.spotify_url }}" target="_blank" class="artist-link">
+            <div class="artist">
+                <img src="{{ artist.url }}" alt="Artist Image">
+                <p>
+                    <strong>{{ artist.name }}</strong><br>
+                </p>
+            </div>
+        </a>
         {% endfor %}
     </div>
 
@@ -252,74 +261,76 @@
     </div>
     
     <script>
-    document.getElementById("getSuggestions").addEventListener("click", function() {
-        const button = this;
-        const recommendationsDiv = document.getElementById("recommendationsContent");
-        
-        button.disabled = true;
-        recommendationsDiv.innerHTML = "<p class='loading'>Finding similar music you might enjoy...</p>";
-        
-        fetch("/get_recommendations", {
-            method: "POST",
-            headers: {
-                'Content-Type': 'application/json',
-            }
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.error) throw new Error(data.error);
+        document.getElementById("getSuggestions").addEventListener("click", function() {
+            const button = this;
+            const recommendationsDiv = document.getElementById("recommendationsContent");
             
-            let html = '';
+            button.disabled = true;
+            recommendationsDiv.innerHTML = "<p class='loading'>Finding similar music you might enjoy...</p>";
             
-            // Check if we have songs
-            if (data.songs && data.songs.length > 0) {
-                html += "<h3>Recommended Songs</h3>";
-                data.songs.forEach(track => {
-                    html += `
-                        <div class="track">
-                            <img src="${track.album_cover}" alt="Album Cover">
-                            <p>
-                                <strong>${track.name}</strong><br>
-                                ${track.artist}<br>
-                                <em>${track.album}</em><br>
-                                <a href="${track.spotify_url}" target="_blank">Listen on Spotify</a>
-                                ${track.preview_url ? `<br><audio controls src="${track.preview_url}"></audio>` : ''}
-                            </p>
-                        </div>
-                    `;
-                });
-            }
-    
-            // Check if we have artists
-            if (data.artists && data.artists.length > 0) {
-                html += "<h3>Recommended Artists</h3>";
-                data.artists.forEach(artist => {
-                    html += `
-                        <div class="artist">
-                            <img src="${artist.image_url}" alt="${artist.name}">
-                            <p>
-                                <strong>${artist.name}</strong><br>
-                                <a href="${artist.spotify_url}" target="_blank">Visit on Spotify</a>
-                            </p>
-                        </div>
-                    `;
-                });
-            }
-    
-            if (!html) {
-                html = "<p>No recommendations found</p>";
-            }
-            
-            recommendationsDiv.innerHTML = html;
-        })
-        .catch(error => {
-            recommendationsDiv.innerHTML = `<p class='error'>Error getting recommendations: ${error.message}</p>`;
-            console.error('Error:', error);
-        })
-        .finally(() => {
-            button.disabled = false;
+            fetch("/get_recommendations", {
+                method: "POST",
+                headers: {
+                    'Content-Type': 'application/json',
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.error) throw new Error(data.error);
+                
+                let html = '';
+                
+                // Check if we have songs
+                if (data.songs && data.songs.length > 0) {
+                    html += "<h3>Recommended Songs</h3>";
+                    data.songs.forEach(track => {
+                        html += `
+                            <a href="${track.spotify_url}" target="_blank" class="track-link">
+                                <div class="track">
+                                    <img src="${track.album_cover}" alt="Album Cover">
+                                    <p>
+                                        <strong>${track.name}</strong><br>
+                                        ${track.artist}<br>
+                                        <em>${track.album}</em><br>
+                                        ${track.preview_url ? `<br><audio controls src="${track.preview_url}"></audio>` : ''}
+                                    </p>
+                                </div>
+                            </a>
+                        `;
+                    });
+                }
+
+                // Check if we have artists
+                if (data.artists && data.artists.length > 0) {
+                    html += "<h3>Recommended Artists</h3>";
+                    data.artists.forEach(artist => {
+                        html += `
+                            <a href="${artist.spotify_url}" target="_blank" class="artist-link">
+                                <div class="artist">
+                                    <img src="${artist.image_url}" alt="${artist.name}">
+                                    <p>
+                                        <strong>${artist.name}</strong><br>
+                                    </p>
+                                </div>
+                            </a>
+                        `;
+                    });
+                }
+
+                if (!html) {
+                    html = "<p>No recommendations found</p>";
+                }
+                
+                recommendationsDiv.innerHTML = html;
+            })
+            .catch(error => {
+                recommendationsDiv.innerHTML = `<p class='error'>Error getting recommendations: ${error.message}</p>`;
+                console.error('Error:', error);
+            })
+            .finally(() => {
+                button.disabled = false;
+            });
         });
-    });
     </script>
 </body>
 </html>
