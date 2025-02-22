@@ -5,8 +5,6 @@ from dotenv import load_dotenv
 import os
 import time
 from openai import OpenAI
-import json
-import requests
 
 # Load environment variables from .env file.
 load_dotenv()
@@ -122,6 +120,10 @@ def stats():
     time_range = session.get("time_range", "short_term")
     result_limit = session.get("result_limit", 5)
 
+    # Initialize the session for tracking suggestions if not already set.
+    if "suggestions" not in session:
+        session["suggestions"] = {}
+
     # Handle form submissions
     if request.method == "POST":
         # Update time range if provided.
@@ -151,16 +153,21 @@ def stats():
     tracks = [getTrackFeatures(track_id) for track_id in track_ids]
     artists = [getArtistFeatures(artist_id) for artist_id in artist_ids]
 
+    # Check if suggestions exist for the current combination.
+    current_combination = f"{time_range}_{result_limit}"
+    suggestions = session["suggestions"].get(current_combination, None)
+
     return render_template(
         "stats.html",
         tracks=tracks,
         artists=artists, 
         song_limit=result_limit,
         time_range=time_range,
-        user=user_profile
+        user=user_profile,
+        suggestions=suggestions  # Pass suggestions to the template
     )
 
-def get_similar_recommendations(top_songs, top_artists, song_limit):
+def get_similar_recommendations(top_songs, top_artists, result_limit):
     if not top_songs or not top_artists:
         print("No top songs or artists provided")
         return [], []
@@ -175,8 +182,8 @@ def get_similar_recommendations(top_songs, top_artists, song_limit):
     Artists: {', '.join(top_artists)}
 
     Please suggest:
-    1. Exactly {song_limit} similar songs in the format "Song Name - Artist Name"
-    2. Exactly {song_limit} similar artists
+    1. Exactly {result_limit} similar songs in the format "Song Name - Artist Name"
+    2. Exactly {result_limit} similar artists
 
     Important rules:
     - DO NOT suggest any songs or artists already mentioned above
@@ -209,7 +216,7 @@ def get_similar_recommendations(top_songs, top_artists, song_limit):
         temperature=0.7
     )
 
-    # Parse response as before
+    # Parse response.
     content = response.choices[0].message.content
     songs = []
     artists = []
@@ -228,12 +235,13 @@ def get_similar_recommendations(top_songs, top_artists, song_limit):
         
         if line:
             if current_section == "songs" and "-" in line:
-                # Check if the song or artist is in the existing lists
+                # Split the line into song and artist
                 song_parts = line.split("-", 1)
                 if len(song_parts) == 2:
                     song_name = song_parts[0].strip().lower()
                     artist_name = song_parts[1].strip().lower()
                     
+                    # Check if the song or artist is already in the user's list
                     if not any(song_name in existing.lower() for existing in top_songs) and \
                        not any(artist_name in existing.lower() for existing in top_artists):
                         songs.append(line)
@@ -243,7 +251,8 @@ def get_similar_recommendations(top_songs, top_artists, song_limit):
                 if not any(line.lower() in existing.lower() for existing in top_artists):
                     artists.append(line)
 
-    return songs, artists
+    # Ensure we return exactly `result_limit` songs and artists.
+    return songs[:result_limit], artists[:result_limit]
 
 @app.route("/get_recommendations", methods=["POST"])
 def get_recommendations():
@@ -257,6 +266,16 @@ def get_recommendations():
         time_range = session.get("time_range", "short_term")
         result_limit = session.get("result_limit", 5)
         
+        # Check if suggestions already exist for this combination
+        current_combination = f"{time_range}_{result_limit}"
+        if "suggestions" not in session:
+            session["suggestions"] = {}
+        
+        if current_combination in session["suggestions"]:
+            # Return existing suggestions
+            return jsonify(session["suggestions"][current_combination])
+        
+        # Generate new suggestions
         top_tracks = sp.current_user_top_tracks(limit=result_limit, time_range=time_range)
         top_artists = sp.current_user_top_artists(limit=result_limit, time_range=time_range)
         
@@ -274,8 +293,7 @@ def get_recommendations():
         
         # Look up songs with popularity filter
         suggested_songs = []
-        failed_songs = []
-        for rec in recommended_songs:
+        for rec in recommended_songs[:result_limit]:  # Use result_limit instead of song_limit
             try:
                 if "-" not in rec:
                     continue
@@ -283,80 +301,32 @@ def get_recommendations():
                 song_parts = rec.split("-", 1)
                 song_name, artist_name = song_parts[0].strip(), song_parts[1].strip()
                 
-                search_queries = [
-                    f"track:{song_name} artist:{artist_name}",
-                    f"{song_name} {artist_name}",
-                    song_name
-                ]
+                # Search for the song using both track and artist name
+                query = f"track:{song_name} artist:{artist_name}"
+                results = sp.search(q=query, type="track", limit=1)
                 
-                track = None
-                for query in search_queries:
-                    results = sp.search(q=query, type="track", limit=10)
-                    if results["tracks"]["items"]:
-                        # Filter for tracks with reasonable popularity (0-100 scale).
-                        popular_tracks = [t for t in results["tracks"]["items"] 
-                                       if t["popularity"] > 30]  
-                        
-                        for potential_track in popular_tracks:
-                            norm_song = ''.join(c.lower() for c in song_name if c.isalnum())
-                            norm_track = ''.join(c.lower() for c in potential_track["name"] if c.isalnum())
-                            norm_artist = ''.join(c.lower() for c in artist_name if c.isalnum())
-                            track_artists = [''.join(c.lower() for c in artist["name"] if c.isalnum()) 
-                                           for artist in potential_track["artists"]]
-                            
-                            song_match = (norm_song in norm_track or norm_track in norm_song)
-                            artist_match = any(norm_artist in track_artist or track_artist in norm_artist 
-                                            for track_artist in track_artists)
-                            
-                            if song_match and artist_match:
-                                track = potential_track
-                                break
-                        
-                        if track:
-                            break
-                
-                if track:
-                    all_artists = [artist["name"] for artist in track["artists"]]
-                    artist_names = ", ".join(all_artists)
+                if results["tracks"]["items"]:
+                    track = results["tracks"]["items"][0]
                     suggested_songs.append({
                         "name": track["name"],
-                        "artist": artist_names,
+                        "artist": track["artists"][0]["name"],
                         "album_cover": track["album"]["images"][0]["url"] if track["album"]["images"] else None,
                         "spotify_url": track["external_urls"]["spotify"],
                         "preview_url": track.get("preview_url"),
                         "album": track["album"]["name"],
                         "popularity": track["popularity"]  
                     })
-                else:
-                    failed_songs.append(f"{song_name} - {artist_name}")
-                    
             except Exception as e:
                 print(f"Error processing song {rec}: {str(e)}")
-                failed_songs.append(rec)
                 continue
 
-        # Look up artists with popularity filter.
+        # Look up artists with popularity filter
         suggested_artists = []
-        failed_artists = []
         for artist_name in recommended_artists:
             try:
-                results = sp.search(q=artist_name, type="artist", limit=10)
-                
-                artist = None
+                results = sp.search(q=artist_name, type="artist", limit=1)
                 if results["artists"]["items"]:
-                    # Filter for artists with reasonable popularity.
-                    popular_artists = [a for a in results["artists"]["items"] 
-                                    if a["popularity"] > 30]  
-                    
-                    for potential_artist in popular_artists:
-                        norm_recommended = ''.join(c.lower() for c in artist_name if c.isalnum())
-                        norm_potential = ''.join(c.lower() for c in potential_artist["name"] if c.isalnum())
-                        
-                        if norm_recommended in norm_potential or norm_potential in norm_recommended:
-                            artist = potential_artist
-                            break
-                
-                if artist:
+                    artist = results["artists"]["items"][0]
                     suggested_artists.append({
                         "name": artist["name"],
                         "image_url": artist["images"][0]["url"] if artist["images"] else None,
@@ -364,17 +334,19 @@ def get_recommendations():
                         "popularity": artist["popularity"]  
                     })
                 else:
-                    failed_artists.append(artist_name)
-                    
+                    print(f"No results found for: {song_name} - {artist_name}")  # Debugging
             except Exception as e:
-                print(f"Error processing artist {artist_name}: {str(e)}")
-                failed_artists.append(artist_name)
+                print(f"Error processing song {rec}: {str(e)}")
                 continue
 
-        return jsonify({
+        # Store suggestions in session
+        session["suggestions"][current_combination] = {
             "songs": suggested_songs,
             "artists": suggested_artists
-        })
+        }
+        session.modified = True
+
+        return jsonify(session["suggestions"][current_combination])
         
     except Exception as e:
         print(f"Error in get_recommendations: {str(e)}")
