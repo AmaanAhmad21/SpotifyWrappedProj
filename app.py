@@ -30,7 +30,7 @@ def createSpotifyOAuth():
 
 @app.route("/")
 def home():
-    # Reset session to defaults
+    # Reset session to defaults.
     session.clear()
     session["time_range"] = "short_term"
     session["result_limit"] = 5
@@ -164,7 +164,7 @@ def stats():
         song_limit=result_limit,
         time_range=time_range,
         user=user_profile,
-        suggestions=suggestions  # Pass suggestions to the template
+        suggestions=suggestions  
     )
 
 def get_similar_recommendations(top_songs, top_artists, result_limit):
@@ -172,7 +172,7 @@ def get_similar_recommendations(top_songs, top_artists, result_limit):
         print("No top songs or artists provided")
         return [], []
 
-    # Create sets of existing names for easier comparison
+    # Create sets of existing names for easier comparison.
     existing_songs = {song.lower() for song in top_songs}
     existing_artists = {artist.lower() for artist in top_artists}
 
@@ -235,19 +235,19 @@ def get_similar_recommendations(top_songs, top_artists, result_limit):
         
         if line:
             if current_section == "songs" and "-" in line:
-                # Split the line into song and artist
+                # Split the line into song and artist.
                 song_parts = line.split("-", 1)
                 if len(song_parts) == 2:
                     song_name = song_parts[0].strip().lower()
                     artist_name = song_parts[1].strip().lower()
                     
-                    # Check if the song or artist is already in the user's list
+                    # Check if the song or artist is already in the user's list.
                     if not any(song_name in existing.lower() for existing in top_songs) and \
                        not any(artist_name in existing.lower() for existing in top_artists):
                         songs.append(line)
                         
             elif current_section == "artists" and not "-" in line:
-                # Check if artist is in existing list
+                # Check if artist is in existing list.
                 if not any(line.lower() in existing.lower() for existing in top_artists):
                     artists.append(line)
 
@@ -266,16 +266,16 @@ def get_recommendations():
         time_range = session.get("time_range", "short_term")
         result_limit = session.get("result_limit", 5)
         
-        # Check if suggestions already exist for this combination
+        # Check if suggestions already exist for this combination.
         current_combination = f"{time_range}_{result_limit}"
         if "suggestions" not in session:
             session["suggestions"] = {}
         
         if current_combination in session["suggestions"]:
-            # Return existing suggestions
+            # Return existing suggestions.
             return jsonify(session["suggestions"][current_combination])
         
-        # Generate new suggestions
+        # Generate new suggestions.
         top_tracks = sp.current_user_top_tracks(limit=result_limit, time_range=time_range)
         top_artists = sp.current_user_top_artists(limit=result_limit, time_range=time_range)
         
@@ -291,9 +291,9 @@ def get_recommendations():
             result_limit
         )
         
-        # Look up songs with popularity filter
+        # Look up songs with popularity filter.
         suggested_songs = []
-        for rec in recommended_songs[:result_limit]:  # Use result_limit instead of song_limit
+        for rec in recommended_songs[:result_limit]:  # Use result_limit instead of song_limit.
             try:
                 if "-" not in rec:
                     continue
@@ -301,7 +301,7 @@ def get_recommendations():
                 song_parts = rec.split("-", 1)
                 song_name, artist_name = song_parts[0].strip(), song_parts[1].strip()
                 
-                # Search for the song using both track and artist name
+                # Search for the song using both track and artist name.
                 query = f"track:{song_name} artist:{artist_name}"
                 results = sp.search(q=query, type="track", limit=1)
                 
@@ -320,7 +320,7 @@ def get_recommendations():
                 print(f"Error processing song {rec}: {str(e)}")
                 continue
 
-        # Look up artists with popularity filter
+        # Look up artists with popularity filter.
         suggested_artists = []
         for artist_name in recommended_artists:
             try:
@@ -333,13 +333,11 @@ def get_recommendations():
                         "spotify_url": artist["external_urls"]["spotify"],
                         "popularity": artist["popularity"]  
                     })
-                else:
-                    print(f"No results found for: {song_name} - {artist_name}")  # Debugging
             except Exception as e:
                 print(f"Error processing song {rec}: {str(e)}")
                 continue
 
-        # Store suggestions in session
+        # Store suggestions in session.
         session["suggestions"][current_combination] = {
             "songs": suggested_songs,
             "artists": suggested_artists

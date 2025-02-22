@@ -226,7 +226,13 @@
         </select>
     </form>
 
-    <h3>Top {{ song_limit }} Tracks ({{ time_range.replace('_', ' ').title() }})</h3>
+    {% set time_range_labels = {
+        'short_term': 'Last Month',
+        'medium_term': 'Last 6 Months',
+        'long_term': 'Last Year'
+    } %}
+
+    <h3>Top {{ song_limit }} Tracks ({{ time_range_labels[time_range] }})</h3>
     <div>
         {% for track in tracks %}
         <a href="{{ track.spotify_url }}" target="_blank" class="track-link">
@@ -241,7 +247,7 @@
         {% endfor %}
     </div>
 
-    <h3>Top {{ song_limit }} Artists ({{ time_range.replace('_', ' ').title() }})</h3>
+    <h3>Top {{ song_limit }} Artists ({{ time_range_labels[time_range] }})</h3>
     <div>
         {% for artist in artists %}
         <a href="{{ artist.spotify_url }}" target="_blank" class="artist-link">
@@ -319,7 +325,7 @@
                 
                 let html = '';
                 
-                // Check if we have songs
+                // Check if we have songs.
                 if (data.songs && data.songs.length > 0) {
                     html += "<h3>Recommended Songs</h3>";
                     data.songs.forEach(track => {
@@ -339,7 +345,7 @@
                     });
                 }
 
-                // Check if we have artists
+                // Check if we have artists.
                 if (data.artists && data.artists.length > 0) {
                     html += "<h3>Recommended Artists</h3>";
                     data.artists.forEach(artist => {
