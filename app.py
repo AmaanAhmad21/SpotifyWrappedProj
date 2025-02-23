@@ -133,7 +133,7 @@ def stats():
     time_range = session.get("time_range", "short_term")
     result_limit = session.get("result_limit", 5)
 
-    # Handle form submissions
+    # Handle form submissions.
     if request.method == "POST":
         # Update time range if provided.
         if "time_range" in request.form:
@@ -164,7 +164,7 @@ def stats():
 
     # Check if suggestions exist for the current combination.
     current_combination = f"{time_range}_{result_limit}"
-    suggestions = cache.get(current_combination)  # Retrieve suggestions from cache
+    suggestions = cache.get(current_combination)  # Retrieve suggestions from cache.
 
     return render_template(
         "stats.html",
@@ -173,7 +173,7 @@ def stats():
         song_limit=result_limit,
         time_range=time_range,
         user=user_profile,
-        suggestions=suggestions  # Pass suggestions to the template
+        suggestions=suggestions  
     )
 
 # Function to generate similar song and artist recommendations using OpenAI.
@@ -182,12 +182,16 @@ def get_similar_recommendations(top_songs, top_artists, result_limit):
         print("No top songs or artists provided")
         return [], []
 
+    print(f"Generating recommendations for {len(top_songs)} songs and {len(top_artists)} artists")
+    print(f"Input songs: {top_songs}")
+    print(f"Input artists: {top_artists}")
+
     # Create sets of existing names for easier comparison.
     existing_songs = {song.lower() for song in top_songs}
     existing_artists = {artist.lower() for artist in top_artists}
 
-    # Generate more recommendations than needed (e.g., double the limit).
-    num_recommendations = result_limit * 2
+    # Request significantly more recommendations to account for filtering.
+    num_recommendations = result_limit * 2  # Get more recomendations.
 
     prompt = f"""
     Based on these songs and artists:
@@ -199,10 +203,13 @@ def get_similar_recommendations(top_songs, top_artists, result_limit):
     2. Exactly {num_recommendations} similar artists
 
     Important rules:
-    - DO NOT suggest any songs or artists already mentioned above (VERY IMPORTANT)
-    - Only suggest fairly well-known songs and artists (they don't need to be super famous, but should be established)
-    - Each suggestion must be unique (VERY IMPORTANT)
-    - Suggestions should match the general style/genre of the input songs
+    - DO NOT suggest any songs or artists already mentioned above (IMPORTANT)
+    - Only suggest well-known songs and artists that are definitely on Spotify
+    - Each suggestion must be unique (IMPORTANT)
+    - Suggestions should match the general style/genre of the input songs (leniant)
+    - Format songs EXACTLY as "Song Name - Artist Name" with a single hyphen
+    - For artist names, use their exact Spotify artist name
+    - Ensure they exist on Spotify (IMPORTANT)
 
     Format your response exactly like this:
     Songs:
@@ -222,56 +229,53 @@ def get_similar_recommendations(top_songs, top_artists, result_limit):
         messages=[
             {
                 "role": "system", 
-                "content": "You are a music recommendation assistant that suggests relatively well-known songs and artists similar to the user's taste. Never suggest songs or artists that are already in the user's list."
+                "content": "You are a music recommendation assistant specializing in current, popular music. Always use exact Spotify artist names and suggest only songs that definitely exist on Spotify. Format all song suggestions exactly as 'Song Name - Artist Name' with a single hyphen."
             },
             {"role": "user", "content": prompt}
         ],
-        temperature=0.7
+        temperature=0.7,
+        max_tokens=1000  # Added to ensure we get complete responses.
     )
 
-    # Parse response.
+    # Parse response with improved error handling.
     content = response.choices[0].message.content
     songs = []
     artists = []
     current_section = None
     
+    print("\nParsing OpenAI response:")
+    print(content)
+    
     for line in content.split("\n"):
         line = line.strip()
-        if "Songs:" in line:
-            current_section = "songs"
-            continue
-        elif "Artists:" in line:
-            current_section = "artists"
+        
+        # Skip empty lines and section headers.
+        if not line or line in ["Songs:", "Artists:"]:
+            if "Songs:" in line:
+                current_section = "songs"
+            elif "Artists:" in line:
+                current_section = "artists"
             continue
             
-        line = line.lstrip("123456789. ")  # Remove numbering
+        # Remove numbering and extra spaces.
+        line = ' '.join(line.split())  # Normalize spaces.
+        line = line.lstrip("1234567890. ")
         
-        if line:
-            if current_section == "songs":
-                # Split the line into song and artist (handle variations in format).
-                if "-" in line:
-                    song_parts = line.split("-", 1)
-                elif "by" in line:
-                    song_parts = line.split("by", 1)
-                else:
-                    continue  # Skip if the format is invalid
-
-                if len(song_parts) == 2:
-                    song_name = song_parts[0].strip().lower()
-                    artist_name = song_parts[1].strip().lower()
+        if current_section == "songs":
+            if " - " in line:  # Strict hyphen check.
+                song_name, artist_name = line.split(" - ", 1)
+                if song_name and artist_name:  # Verify both parts exist.
+                    songs.append(f"{song_name.strip()} - {artist_name.strip()}")
+                    print(f"Added song: {line}")
                     
-                    # Check if the song or artist is already in the user's list.
-                    if not any(song_name in existing.lower() for existing in top_songs) and \
-                       not any(artist_name in existing.lower() for existing in top_artists):
-                        songs.append(line)
-                        
-            elif current_section == "artists":
-                # Check if artist is in existing list.
-                if not any(line.lower() in existing.lower() for existing in top_artists):
-                    artists.append(line)
+        elif current_section == "artists" and line:
+            artist_name = line.strip()
+            if artist_name and not any(artist_name.lower() == existing.lower() for existing in top_artists):
+                artists.append(artist_name)
+                print(f"Added artist: {artist_name}")
 
-    # Return up to `result_limit` songs and artists.
-    return songs[:result_limit], artists[:result_limit]
+    print(f"\nParsed {len(songs)} songs and {len(artists)} artists")
+    return songs, artists
 
 # Route to get recommendations: Generates and returns similar songs and artists.
 @app.route("/get_recommendations", methods=["POST"])
@@ -315,7 +319,7 @@ def get_recommendations():
         for rec in recommended_songs:
             try:
                 if "-" not in rec and "by" not in rec:
-                    continue  # Skip if the format is invalid
+                    continue  # Skip if the format is invalid.
                 
                 # Split the recommendation into song and artist.
                 if "-" in rec:
@@ -324,31 +328,33 @@ def get_recommendations():
                     song_parts = rec.split("by", 1)
                 
                 if len(song_parts) != 2:
-                    continue  # Skip if the format is invalid
+                    continue  # Skip if the format is invalid.
 
                 song_name = song_parts[0].strip()
                 artist_name = song_parts[1].strip()
                 
                 # Search for the song using both track and artist name.
                 query = f"track:{song_name} artist:{artist_name}"
-                results = sp.search(q=query, type="track", limit=5)  # Increase limit to 5 for better results
+                results = sp.search(q=query, type="track", limit=5)  # Increase limit to 5 for better results.
                 
                 if results["tracks"]["items"]:
                     # Find the best match based on popularity.
-                    best_match = max(results["tracks"]["items"], key=lambda x: x["popularity"])
-                    suggested_songs.append({
-                        "name": best_match["name"],
-                        "artist": best_match["artists"][0]["name"],
-                        "album_cover": best_match["album"]["images"][0]["url"] if best_match["album"]["images"] else None,
-                        "spotify_url": best_match["external_urls"]["spotify"],
-                        "preview_url": best_match.get("preview_url"),
-                        "album": best_match["album"]["name"],
-                        "popularity": best_match["popularity"]  
-                    })
+                    filtered_suggestions = [track for track in results["tracks"]["items"] if track['popularity'] > 40]
+                    if filtered_suggestions:  # Ensure there are filtered results.
+                        track = filtered_suggestions[0]  # Take the first track.
+                        suggested_songs.append({
+                            "name": track["name"],
+                            "artist": track["artists"][0]["name"],
+                            "album_cover": track["album"]["images"][0]["url"] if track["album"]["images"] else None,
+                            "spotify_url": track["external_urls"]["spotify"],
+                            "preview_url": track.get("preview_url"),
+                            "album": track["album"]["name"],
+                            "popularity": track["popularity"]  
+                        })
 
-                    # Stop if we have enough songs.
-                    if len(suggested_songs) >= result_limit:
-                        break
+                        # Stop if we have enough songs.
+                        if len(suggested_songs) >= result_limit:
+                            break
             except Exception as e:
                 print(f"Error processing song {rec}: {str(e)}")
                 continue
@@ -359,17 +365,20 @@ def get_recommendations():
             try:
                 results = sp.search(q=artist_name, type="artist", limit=1)
                 if results["artists"]["items"]:
-                    artist = results["artists"]["items"][0]
-                    suggested_artists.append({
-                        "name": artist["name"],
-                        "image_url": artist["images"][0]["url"] if artist["images"] else None,
-                        "spotify_url": artist["external_urls"]["spotify"],
-                        "popularity": artist["popularity"]  
-                    })
+                    # Filter artists based on popularity.
+                    filtered_suggestions = [artist for artist in results["artists"]["items"] if artist['popularity'] > 40]
+                    if filtered_suggestions:  # Ensure there are filtered results.
+                        artist = filtered_suggestions[0]  # Take the first artist.
+                        suggested_artists.append({
+                            "name": artist["name"],
+                            "image_url": artist["images"][0]["url"] if artist["images"] else None,
+                            "spotify_url": artist["external_urls"]["spotify"],
+                            "popularity": artist["popularity"]  
+                        })
 
-                    # Stop if we have enough artists.
-                    if len(suggested_artists) >= result_limit:
-                        break
+                        # Stop if we have enough artists.
+                        if len(suggested_artists) >= result_limit:
+                            break
             except Exception as e:
                 print(f"Error processing artist {artist_name}: {str(e)}")
                 continue
@@ -379,7 +388,7 @@ def get_recommendations():
             "songs": suggested_songs,
             "artists": suggested_artists
         }
-        cache.set(current_combination, suggestions)  # Store suggestions in cache
+        cache.set(current_combination, suggestions)  # Store suggestions in cache.
 
         # Return suggestions as JSON.
         return jsonify(suggestions)
