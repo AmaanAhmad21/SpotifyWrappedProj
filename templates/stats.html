@@ -195,6 +195,54 @@
         .spotify-link:hover {
             color: #1ed760;
         }
+
+        /* Loading bar styles */
+        .loading-container {
+            width: 80%;
+            max-width: 300px;
+            margin: 20px auto;
+            text-align: center;
+        }
+
+        .loading-bar {
+            height: 6px;
+            width: 100%;
+            background-color: #333;
+            border-radius: 3px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .loading-bar-progress {
+            height: 100%;
+            background-color: #1db954;
+            border-radius: 3px;
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 0;
+            animation: loading-animation 1s infinite ease-in-out;
+        }
+
+        .loading-text {
+            margin-top: 10px;
+            color: #888;
+            font-style: italic;
+        }
+
+        @keyframes loading-animation {
+            0% {
+                width: 0;
+                left: 0;
+            }
+            50% {
+                width: 70%;
+            }
+            100% {
+                width: 0;
+                left: 100%;
+            }
+        }
     </style>
 </head>
 <body>
@@ -311,7 +359,18 @@
             const recommendationsDiv = document.getElementById("recommendationsContent");
             
             button.disabled = true;
-            recommendationsDiv.innerHTML = "<p class='loading'>Finding similar music you might enjoy...</p>";
+            
+            // Create and add loading bar to the recommendations div
+            const loadingHTML = `
+                <div class="loading-container">
+                    <div class="loading-bar">
+                        <div class="loading-bar-progress"></div>
+                    </div>
+                    <div class="loading-text">Finding similar music you might enjoy...</div>
+                </div>
+            `;
+            
+            recommendationsDiv.innerHTML = loadingHTML;
             
             fetch("/get_recommendations", {
                 method: "POST",
@@ -366,11 +425,16 @@
                     html = "<p>No recommendations found</p>";
                 }
                 
-                recommendationsDiv.innerHTML = html;
+                // Add a small delay to show the loading animation
+                setTimeout(() => {
+                    recommendationsDiv.innerHTML = html;
+                }, 1500);
             })
             .catch(error => {
-                recommendationsDiv.innerHTML = `<p class='error'>Error getting recommendations: ${error.message}</p>`;
-                console.error('Error:', error);
+                setTimeout(() => {
+                    recommendationsDiv.innerHTML = `<p class='error'>Error getting recommendations: ${error.message}</p>`;
+                    console.error('Error:', error);
+                }, 1500);
             })
             .finally(() => {
                 button.disabled = true; // Keep the button disabled after use.

@@ -6,6 +6,7 @@ import os
 import time
 from openai import OpenAI
 from flask_caching import Cache
+from concurrent.futures import ThreadPoolExecutor
 
 # Load environment variables from .env file.
 load_dotenv()
@@ -21,8 +22,14 @@ app = Flask(__name__)
 app.secret_key = os.getenv("SPOTIFY_CLIENT_SECRET")  
 app.config["SESSION_PERMANENT"] = False
 
-# Initialize Flask caching.
-cache = Cache(app, config={'CACHE_TYPE': 'SimpleCache'})
+# Better caching configuration
+cache = Cache(app, config={
+    'CACHE_TYPE': 'SimpleCache',
+    'CACHE_DEFAULT_TIMEOUT': 300  # Cache results for 5 minutes
+})
+
+# Create a thread pool for running multiple things at once.
+executor = ThreadPoolExecutor(max_workers=10)
 
 # Function to create a Spotify OAuth object.
 def createSpotifyOAuth():
@@ -63,13 +70,10 @@ def getToken():
     token_info = session.get(TOKEN_INFO, None)
     return token_info
 
-# Function to retrieve user details from Spotify.
-def getUserDetails():
-    user_token = getToken()
-    if not user_token:
-        return None
-    
-    sp = spotipy.Spotify(auth=user_token["access_token"])
+# Improved: Cache user profile data.
+@cache.memoize(timeout=300)
+def getUserDetails(access_token):
+    sp = spotipy.Spotify(auth=access_token)
     try:
         user_profile = sp.current_user()
         return {
@@ -81,12 +85,12 @@ def getUserDetails():
     except:
         return None
 
-# Function to retrieve track features (name, album, artist, etc.) from Spotify.
-def getTrackFeatures(track_ids):
-    user_token = getToken()
-    sp = spotipy.Spotify(auth=user_token["access_token"])
-    time.sleep(0.5)
-    meta = sp.track(track_ids)
+# Improved: Cache track info and remove sleep delay
+@cache.memoize(timeout=300)
+def getTrackFeatures(track_id, access_token):
+    sp = spotipy.Spotify(auth=access_token)
+    # Removed the sleep(0.5) that was slowing things down
+    meta = sp.track(track_id)
     name = meta["name"]
     album = meta["album"]["name"]
     artists = [artist["name"] for artist in meta["album"]["artists"]]
@@ -101,12 +105,12 @@ def getTrackFeatures(track_ids):
         "spotify_url": track_spotify_url
     }
 
-# Function to retrieve artist features (name, image, etc.) from Spotify.
-def getArtistFeatures(artist_ids):
-    user_token = getToken()
-    sp = spotipy.Spotify(auth=user_token["access_token"])
-    time.sleep(0.5)
-    meta = sp.artist(artist_ids)
+# Improved: Cache artist info and remove sleep delay
+@cache.memoize(timeout=300)
+def getArtistFeatures(artist_id, access_token):
+    sp = spotipy.Spotify(auth=access_token)
+    # Removed the sleep(0.5) that was slowing things down
+    meta = sp.artist(artist_id)
     name = meta["name"]
     artist_img = meta["images"][0]["url"]
     artist_spotify_url = meta["external_urls"]["spotify"]
@@ -116,64 +120,98 @@ def getArtistFeatures(artist_ids):
         "spotify_url": artist_spotify_url
     }
 
-# Stats route: Displays user's top tracks and artists.
+# New: Get top tracks and artists at the same time instead of one after another
+@cache.memoize(timeout=300)
+def getTopItems(access_token, time_range, result_limit):
+    sp = spotipy.Spotify(auth=access_token)
+    
+    # Functions to get tracks and artists
+    def get_tracks():
+        return sp.current_user_top_tracks(
+            limit=result_limit, 
+            offset=0, 
+            time_range=time_range
+        )
+    
+    def get_artists():
+        return sp.current_user_top_artists(
+            limit=result_limit, 
+            offset=0, 
+            time_range=time_range
+        )
+    
+    # Run both API calls at the same time instead of waiting for one to finish
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        tracks_future = executor.submit(get_tracks)
+        artists_future = executor.submit(get_artists)
+        
+        userTopSongs = tracks_future.result()
+        userTopArtists = artists_future.result()
+    
+    return userTopSongs, userTopArtists
+
+# Improved stats route
 @app.route("/stats", methods=["GET", "POST"])
 def stats():
     user_token = getToken()
     if not user_token:
         return redirect(url_for("login"))
 
-    sp = spotipy.Spotify(auth=user_token["access_token"])
-
-    user_profile = getUserDetails()
+    access_token = user_token["access_token"]
+    
+    # Get user profile (now cached)
+    user_profile = getUserDetails(access_token)
     if not user_profile:
         return redirect(url_for("login"))
 
-    # Get current values, with defaults if not set.
+    # Get current values
     time_range = session.get("time_range", "short_term")
     result_limit = session.get("result_limit", 5)
 
-    # Handle form submissions.
+    # Handle form submissions
     if request.method == "POST":
-        # Update time range if provided.
         if "time_range" in request.form:
             time_range = request.form["time_range"]
             session["time_range"] = time_range
-        
-        # Update result limit if provided.
         if "result_limit" in request.form:
             result_limit = int(request.form["result_limit"])
             session["result_limit"] = result_limit
 
-    # Get top tracks and artists.
-    userTopSongs = sp.current_user_top_tracks(
-        limit=result_limit, 
-        offset=0, 
-        time_range=time_range
-    )
-    userTopArtists = sp.current_user_top_artists(
-        limit=result_limit, 
-        offset=0, 
-        time_range=time_range
-    )
+    # Get top tracks and artists (now cached and in parallel)
+    userTopSongs, userTopArtists = getTopItems(access_token, time_range, result_limit)
 
+    # Process track and artist details in parallel
     track_ids = [track["id"] for track in userTopSongs["items"]]
     artist_ids = [artist["id"] for artist in userTopArtists["items"]]
-    tracks = [getTrackFeatures(track_id) for track_id in track_ids]
-    artists = [getArtistFeatures(artist_id) for artist_id in artist_ids]
 
-    # Check if suggestions exist for the current combination.
+    # Process all tracks at once
+    def process_tracks():
+        return [getTrackFeatures(track_id, access_token) for track_id in track_ids]
+
+    # Process all artists at once
+    def process_artists():
+        return [getArtistFeatures(artist_id, access_token) for artist_id in artist_ids]
+
+    # Run both processes at the same time
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        tracks_future = executor.submit(process_tracks)
+        artists_future = executor.submit(process_artists)
+        
+        tracks = tracks_future.result()
+        artists = artists_future.result()
+
+    # Check if suggestions already exist in cache
     current_combination = f"{time_range}_{result_limit}"
-    suggestions = cache.get(current_combination)  # Retrieve suggestions from cache.
+    suggestions = cache.get(current_combination)
 
     return render_template(
         "stats.html",
         tracks=tracks,
-        artists=artists, 
+        artists=artists,
         song_limit=result_limit,
         time_range=time_range,
         user=user_profile,
-        suggestions=suggestions  
+        suggestions=suggestions
     )
 
 # Function to generate similar song and artist recommendations using OpenAI.
