@@ -220,9 +220,10 @@ def get_similar_recommendations(top_songs, top_artists, result_limit):
         print("No top songs or artists provided")
         return [], []
 
-    print(f"Generating recommendations for {len(top_songs)} songs and {len(top_artists)} artists")
-    print(f"Input songs: {top_songs}")
-    print(f"Input artists: {top_artists}")
+    # Debug statements.
+    #print(f"Generating recommendations for {len(top_songs)} songs and {len(top_artists)} artists")
+    #print(f"Input songs: {top_songs}")
+    #print(f"Input artists: {top_artists}")
 
     # Create sets of existing names for easier comparison.
     existing_songs = {song.lower() for song in top_songs}
@@ -281,8 +282,9 @@ def get_similar_recommendations(top_songs, top_artists, result_limit):
     artists = []
     current_section = None
     
-    print("\nParsing OpenAI response:")
-    print(content)
+    # Debug statements.
+    #print("\nParsing OpenAI response:")
+    #print(content)
     
     for line in content.split("\n"):
         line = line.strip()
@@ -304,15 +306,15 @@ def get_similar_recommendations(top_songs, top_artists, result_limit):
                 song_name, artist_name = line.split(" - ", 1)
                 if song_name and artist_name:  # Verify both parts exist.
                     songs.append(f"{song_name.strip()} - {artist_name.strip()}")
-                    print(f"Added song: {line}")
+                    #print(f"Added song: {line}")
                     
         elif current_section == "artists" and line:
             artist_name = line.strip()
             if artist_name and not any(artist_name.lower() == existing.lower() for existing in top_artists):
                 artists.append(artist_name)
-                print(f"Added artist: {artist_name}")
+                #print(f"Added artist: {artist_name}")
 
-    print(f"\nParsed {len(songs)} songs and {len(artists)} artists")
+    #print(f"\nParsed {len(songs)} songs and {len(artists)} artists")
     return songs, artists
 
 # Route to get recommendations: Generates and returns similar songs and artists.
@@ -394,7 +396,7 @@ def get_recommendations():
                         if len(suggested_songs) >= result_limit:
                             break
             except Exception as e:
-                print(f"Error processing song {rec}: {str(e)}")
+                #print(f"Error processing song {rec}: {str(e)}")
                 continue
 
         # Look up artists with popularity filter.
@@ -418,7 +420,7 @@ def get_recommendations():
                         if len(suggested_artists) >= result_limit:
                             break
             except Exception as e:
-                print(f"Error processing artist {artist_name}: {str(e)}")
+                #print(f"Error processing artist {artist_name}: {str(e)}")
                 continue
 
         # Store suggestions in cache.
@@ -432,5 +434,5 @@ def get_recommendations():
         return jsonify(suggestions)
         
     except Exception as e:
-        print(f"Error in get_recommendations: {str(e)}")
+        #print(f"Error in get_recommendations: {str(e)}")
         return jsonify({"error": str(e)}), 500
