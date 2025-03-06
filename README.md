@@ -3,7 +3,7 @@
 Spotify Music Recommendation App
 A live web application that analyzes your Spotify listening history and recommends new music using AI. Simply log in with your Spotify account to see your top tracks and artists, and receive personalized AI-powered music recommendations based on your unique listening patterns.
 🎵 Live App
-Visit the app: link to app.
+Visit the app: (https://wrappedvibe.onrender.com)
 Experience your personalized music recommendations without needing to set up anything yourself. The application is fully deployed and ready to use!
 ✨ What This App Does
 This application provides a personalized music discovery experience by:
@@ -41,9 +41,9 @@ Performance: Server-side caching and concurrent processing
 Have suggestions or encountering issues? Please reach out:
 
 Submit an issue on this repository
-Contact: your-email@example.com
+Contact: amaanzahmad2004@gmail.com
 
 ⚖️ License
-This is a proprietary application. The source code is provided for reference and educational purposes but is not available for direct reuse in other applications.
+This is a proprietary application. 
 
 Note: This is an independent project and is not affiliated with Spotify.
