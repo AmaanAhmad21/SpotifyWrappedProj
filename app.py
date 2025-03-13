@@ -7,6 +7,7 @@ import time
 from openai import OpenAI
 from flask_caching import Cache
 from concurrent.futures import ThreadPoolExecutor
+from flask_session import Session
 
 # Load environment variables from .env file.
 load_dotenv()
@@ -20,7 +21,10 @@ OpenAI.api_key = os.getenv("OPENAI_API_KEY")
 # Initialize Flask app.
 app = Flask(__name__)
 app.secret_key = os.getenv("SPOTIFY_CLIENT_SECRET")  
+app.config["SESSION_TYPE"] = "filesystem"
+app.config["SESSION_FILE_DIR"] = "/tmp/flask_session"
 app.config["SESSION_PERMANENT"] = False
+Session(app)
 
 # Better caching configuration.
 cache = Cache(app, config={
@@ -68,6 +72,20 @@ def redirect_page():
 # Function to retrieve Spotify access token from session.
 def getToken():
     token_info = session.get(TOKEN_INFO, None)
+    
+    # If no token found, return None.
+    if not token_info:
+        return None
+    
+    # Check if token has expired.
+    now = int(time.time())
+    is_expired = token_info.get('expires_at', 0) - now < 60
+    
+    if is_expired:
+        # Clear the expired token.
+        session.pop(TOKEN_INFO, None)
+        return None
+    
     return token_info
 
 # Improved: Cache user profile data.
@@ -240,7 +258,8 @@ def get_similar_recommendations(top_songs, top_artists, result_limit):
     2. Exactly {num_recommendations} similar artists
 
     Important rules:
-    - DO NOT suggest any songs or artists already mentioned above (IMPORTANT)
+    - DO NOT suggest any songs or artists already mentioned above (IMPORTANT!!!)
+    - REMEMBER DO NOT GIVE REPEATED SONGS OR ARTISTS (IMPORTANT!!!)
     - Only suggest well-known songs and artists that are definitely on Spotify
     - Each suggestion must be unique (IMPORTANT)
     - Suggestions should match the general style/genre of the input songs (leniant)
