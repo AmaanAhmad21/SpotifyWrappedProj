@@ -22,10 +22,10 @@ app = Flask(__name__)
 app.secret_key = os.getenv("SPOTIFY_CLIENT_SECRET")  
 app.config["SESSION_PERMANENT"] = False
 
-# Better caching configuration
+# Better caching configuration.
 cache = Cache(app, config={
     'CACHE_TYPE': 'SimpleCache',
-    'CACHE_DEFAULT_TIMEOUT': 300  # Cache results for 5 minutes
+    'CACHE_DEFAULT_TIMEOUT': 300  # Cache results for 5 minutes.
 })
 
 # Create a thread pool for running multiple things at once.
@@ -85,11 +85,10 @@ def getUserDetails(access_token):
     except:
         return None
 
-# Improved: Cache track info and remove sleep delay
+# Improved: Cache track info and remove sleep delay.
 @cache.memoize(timeout=300)
 def getTrackFeatures(track_id, access_token):
     sp = spotipy.Spotify(auth=access_token)
-    # Removed the sleep(0.5) that was slowing things down
     meta = sp.track(track_id)
     name = meta["name"]
     album = meta["album"]["name"]
@@ -105,11 +104,10 @@ def getTrackFeatures(track_id, access_token):
         "spotify_url": track_spotify_url
     }
 
-# Improved: Cache artist info and remove sleep delay
+# Improved: Cache artist info and remove sleep delay.
 @cache.memoize(timeout=300)
 def getArtistFeatures(artist_id, access_token):
     sp = spotipy.Spotify(auth=access_token)
-    # Removed the sleep(0.5) that was slowing things down
     meta = sp.artist(artist_id)
     name = meta["name"]
     artist_img = meta["images"][0]["url"]
@@ -120,12 +118,12 @@ def getArtistFeatures(artist_id, access_token):
         "spotify_url": artist_spotify_url
     }
 
-# New: Get top tracks and artists at the same time instead of one after another
+# New: Get top tracks and artists at the same time instead of one after another.
 @cache.memoize(timeout=300)
 def getTopItems(access_token, time_range, result_limit):
     sp = spotipy.Spotify(auth=access_token)
     
-    # Functions to get tracks and artists
+    # Functions to get tracks and artists.
     def get_tracks():
         return sp.current_user_top_tracks(
             limit=result_limit, 
@@ -140,7 +138,7 @@ def getTopItems(access_token, time_range, result_limit):
             time_range=time_range
         )
     
-    # Run both API calls at the same time instead of waiting for one to finish
+    # Run both API calls at the same time instead of waiting for one to finish.
     with ThreadPoolExecutor(max_workers=2) as executor:
         tracks_future = executor.submit(get_tracks)
         artists_future = executor.submit(get_artists)
@@ -150,7 +148,7 @@ def getTopItems(access_token, time_range, result_limit):
     
     return userTopSongs, userTopArtists
 
-# Improved stats route
+# Improved stats route.
 @app.route("/stats", methods=["GET", "POST"])
 def stats():
     user_token = getToken()
@@ -159,16 +157,16 @@ def stats():
 
     access_token = user_token["access_token"]
     
-    # Get user profile (now cached)
+    # Get user profile (now cached).
     user_profile = getUserDetails(access_token)
     if not user_profile:
         return redirect(url_for("login"))
 
-    # Get current values
+    # Get current values.
     time_range = session.get("time_range", "short_term")
     result_limit = session.get("result_limit", 5)
 
-    # Handle form submissions
+    # Handle form submissions.
     if request.method == "POST":
         if "time_range" in request.form:
             time_range = request.form["time_range"]
@@ -177,22 +175,22 @@ def stats():
             result_limit = int(request.form["result_limit"])
             session["result_limit"] = result_limit
 
-    # Get top tracks and artists (now cached and in parallel)
+    # Get top tracks and artists (now cached and in parallel).
     userTopSongs, userTopArtists = getTopItems(access_token, time_range, result_limit)
 
-    # Process track and artist details in parallel
+    # Process track and artist details in parallel.
     track_ids = [track["id"] for track in userTopSongs["items"]]
     artist_ids = [artist["id"] for artist in userTopArtists["items"]]
 
-    # Process all tracks at once
+    # Process all tracks at once.
     def process_tracks():
         return [getTrackFeatures(track_id, access_token) for track_id in track_ids]
 
-    # Process all artists at once
+    # Process all artists at once.
     def process_artists():
         return [getArtistFeatures(artist_id, access_token) for artist_id in artist_ids]
 
-    # Run both processes at the same time
+    # Run both processes at the same time.
     with ThreadPoolExecutor(max_workers=2) as executor:
         tracks_future = executor.submit(process_tracks)
         artists_future = executor.submit(process_artists)
@@ -200,7 +198,7 @@ def stats():
         tracks = tracks_future.result()
         artists = artists_future.result()
 
-    # Check if suggestions already exist in cache
+    # Check if suggestions already exist in cache.
     current_combination = f"{time_range}_{result_limit}"
     suggestions = cache.get(current_combination)
 
