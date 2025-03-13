@@ -259,7 +259,7 @@ def get_similar_recommendations(top_songs, top_artists, result_limit):
 
     Important rules:
     - DO NOT suggest any songs or artists already mentioned above (IMPORTANT!!!)
-    - REMEMBER DO NOT GIVE REPEATED SONGS OR ARTISTS (IMPORTANT!!!)
+    - MAKE SURE TO REMEMBER DO NOT GIVE REPEATED SONGS OR ARTISTS (IMPORTANT!!!)
     - Only suggest well-known songs and artists that are definitely on Spotify
     - Each suggestion must be unique (IMPORTANT)
     - Suggestions should match the general style/genre of the input songs (leniant)
