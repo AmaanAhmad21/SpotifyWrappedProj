@@ -289,7 +289,7 @@ def get_similar_recommendations(top_songs, top_artists, result_limit):
             },
             {"role": "user", "content": prompt}
         ],
-        temperature=0.7,
+        temperature=0.65,
         max_tokens=1000  # Added to ensure we get complete responses.
     )
 
