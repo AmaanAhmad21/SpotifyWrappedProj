@@ -22,8 +22,9 @@ OpenAI.api_key = os.getenv("OPENAI_API_KEY")
 app = Flask(__name__)
 app.secret_key = os.getenv("SPOTIFY_CLIENT_SECRET")  
 app.config["SESSION_TYPE"] = "filesystem"
-app.config["SESSION_FILE_DIR"] = "/tmp/flask_session"
+app.config["SESSION_FILE_DIR"] = "./.flask_session"  
 app.config["SESSION_PERMANENT"] = False
+app.config["SESSION_USE_SIGNER"] = True  
 Session(app)
 
 # Better caching configuration.
@@ -103,7 +104,7 @@ def getUserDetails(access_token):
     except:
         return None
 
-# Improved: Cache track info and remove sleep delay.
+# Improved: Cache track info.
 @cache.memoize(timeout=300)
 def getTrackFeatures(track_id, access_token):
     sp = spotipy.Spotify(auth=access_token)
@@ -122,7 +123,7 @@ def getTrackFeatures(track_id, access_token):
         "spotify_url": track_spotify_url
     }
 
-# Improved: Cache artist info and remove sleep delay.
+# Improved: Cache artist info.
 @cache.memoize(timeout=300)
 def getArtistFeatures(artist_id, access_token):
     sp = spotipy.Spotify(auth=access_token)
@@ -166,11 +167,13 @@ def getTopItems(access_token, time_range, result_limit):
     
     return userTopSongs, userTopArtists
 
-# Improved stats route.
+# Stats route.
 @app.route("/stats", methods=["GET", "POST"])
 def stats():
     user_token = getToken()
     if not user_token:
+        # Clear any potentially corrupted session data.
+        session.clear()
         return redirect(url_for("login"))
 
     access_token = user_token["access_token"]
