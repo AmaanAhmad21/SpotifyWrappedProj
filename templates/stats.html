@@ -243,6 +243,32 @@
                 left: 100%;
             }
         }
+        /* Add this to your existing CSS */
+        @media screen and (max-width: 768px) {
+            .user-profile {
+                /* Change from fixed positioning to relative */
+                position: relative;
+                top: auto;
+                right: auto;
+                display: flex;
+                justify-content: center;
+                margin: 10px auto;
+                padding: 8px;
+                width: 80%;
+                max-width: 300px;
+            }
+            
+            body {
+                /* Add some top padding to accommodate the repositioned profile */
+                padding-top: 10px;
+                margin-top: 20px;
+            }
+            
+            /* Make heading smaller on mobile */
+            h2 {
+                font-size: 1.5em;
+            }
+        }
     </style>
 </head>
 <body>

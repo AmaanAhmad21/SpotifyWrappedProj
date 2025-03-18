@@ -25,6 +25,7 @@ app.config["SESSION_TYPE"] = "filesystem"
 app.config["SESSION_FILE_DIR"] = "./.flask_session"  
 app.config["SESSION_PERMANENT"] = False
 app.config["SESSION_USE_SIGNER"] = True  
+app.config["SESSION_KEY_PREFIX"] = "spotify_session_"  
 Session(app)
 
 # Better caching configuration.
@@ -61,6 +62,12 @@ def login():
     auth_url = sp_oauth.get_authorize_url()
     return redirect(auth_url)
 
+# Add this route temporarily to clear your cache.
+@app.route("/clear_cache")
+def clear_cache():
+    cache.clear()
+    return "Cache cleared"
+
 # Redirect route: Handles Spotify OAuth callback and stores access token in session.
 @app.route("/redirect_page")
 def redirect_page():
@@ -91,7 +98,7 @@ def getToken():
 
 # Improved: Cache user profile data.
 @cache.memoize(timeout=300)
-def getUserDetails(access_token):
+def getUserDetails(access_token, user_id):
     sp = spotipy.Spotify(auth=access_token)
     try:
         user_profile = sp.current_user()
@@ -177,9 +184,12 @@ def stats():
         return redirect(url_for("login"))
 
     access_token = user_token["access_token"]
+
+    sp = spotipy.Spotify(auth=access_token)
+    user_id = sp.current_user()["id"]  # Get unique user ID.
     
     # Get user profile (now cached).
-    user_profile = getUserDetails(access_token)
+    user_profile = getUserDetails(access_token, user_id)
     if not user_profile:
         return redirect(url_for("login"))
 
