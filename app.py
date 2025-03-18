@@ -7,7 +7,6 @@ import time
 from openai import OpenAI
 from flask_caching import Cache
 from concurrent.futures import ThreadPoolExecutor
-from flask_session import Session
 
 # Load environment variables from .env file.
 load_dotenv()
@@ -20,13 +19,8 @@ OpenAI.api_key = os.getenv("OPENAI_API_KEY")
 
 # Initialize Flask app.
 app = Flask(__name__)
-app.secret_key = os.getenv("SPOTIFY_CLIENT_SECRET")  
-app.config["SESSION_TYPE"] = "filesystem"
-app.config["SESSION_FILE_DIR"] = "./.flask_session"  
+app.secret_key = os.getenv("SPOTIFY_CLIENT_SECRET")   
 app.config["SESSION_PERMANENT"] = False
-app.config["SESSION_USE_SIGNER"] = True  
-app.config["SESSION_KEY_PREFIX"] = "spotify_session_"  
-Session(app)
 
 # Better caching configuration.
 cache = Cache(app, config={
@@ -62,12 +56,6 @@ def login():
     auth_url = sp_oauth.get_authorize_url()
     return redirect(auth_url)
 
-# Add this route temporarily to clear your cache.
-@app.route("/clear_cache")
-def clear_cache():
-    cache.clear()
-    return "Cache cleared"
-
 # Redirect route: Handles Spotify OAuth callback and stores access token in session.
 @app.route("/redirect_page")
 def redirect_page():
@@ -80,25 +68,11 @@ def redirect_page():
 # Function to retrieve Spotify access token from session.
 def getToken():
     token_info = session.get(TOKEN_INFO, None)
-    
-    # If no token found, return None.
-    if not token_info:
-        return None
-    
-    # Check if token has expired.
-    now = int(time.time())
-    is_expired = token_info.get('expires_at', 0) - now < 60
-    
-    if is_expired:
-        # Clear the expired token.
-        session.pop(TOKEN_INFO, None)
-        return None
-    
     return token_info
 
 # Improved: Cache user profile data.
 @cache.memoize(timeout=300)
-def getUserDetails(access_token, user_id):
+def getUserDetails(access_token):
     sp = spotipy.Spotify(auth=access_token)
     try:
         user_profile = sp.current_user()
@@ -184,12 +158,9 @@ def stats():
         return redirect(url_for("login"))
 
     access_token = user_token["access_token"]
-
-    sp = spotipy.Spotify(auth=access_token)
-    user_id = sp.current_user()["id"]  # Get unique user ID.
     
     # Get user profile (now cached).
-    user_profile = getUserDetails(access_token, user_id)
+    user_profile = getUserDetails(access_token)
     if not user_profile:
         return redirect(url_for("login"))
 
