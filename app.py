@@ -272,8 +272,8 @@ def get_similar_recommendations(top_songs, top_artists, result_limit):
     existing_songs = {song.lower() for song in top_songs}
     existing_artists = {artist.lower() for artist in top_artists}
 
-    # Request significantly more recommendations to account for filtering.
-    num_recommendations = result_limit * 2  # Get more recomendations.
+    # Request a fixed number of recommendations instead of scaling with result_limit.
+    num_recommendations = 10  # Ask for 10 recommendations to ensure we get at least 5 valid ones.
 
     prompt = f"""
     Based on these songs and artists:
@@ -436,35 +436,41 @@ def get_recommendations():
                             "popularity": track["popularity"]  
                         })
 
-                        # Stop if we have enough songs.
-                        if len(suggested_songs) >= result_limit:
+                        # Stop if we have enough songs (always 5).
+                        if len(suggested_songs) >= 5:
                             break
             except Exception as e:
-                #print(f"Error processing song {rec}: {str(e)}")
                 continue
 
         # Look up artists with popularity filter.
         suggested_artists = []
         for artist_name in recommended_artists:
             try:
-                results = sp.search(q=artist_name, type="artist", limit=1)
+                results = sp.search(q=artist_name, type="artist", limit=3)  # Increased limit for better matching.
                 if results["artists"]["items"]:
-                    # Filter artists based on popularity.
-                    filtered_suggestions = [artist for artist in results["artists"]["items"] if artist['popularity'] > 40]
-                    if filtered_suggestions:  # Ensure there are filtered results.
-                        artist = filtered_suggestions[0]  # Take the first artist.
+                    # Less strict popularity filter (reduced from 40 to 30).
+                    filtered_suggestions = [artist for artist in results["artists"]["items"] if artist['popularity'] > 30]
+                    if filtered_suggestions:
+                        artist = filtered_suggestions[0]
                         suggested_artists.append({
                             "name": artist["name"],
                             "image_url": artist["images"][0]["url"] if artist["images"] else None,
                             "spotify_url": artist["external_urls"]["spotify"],
-                            "popularity": artist["popularity"]  
+                            "popularity": artist["popularity"]
+                        })
+                    else:  # If no artists meet popularity threshold, take the most popular one anyway.
+                        artist = max(results["artists"]["items"], key=lambda x: x['popularity'])
+                        suggested_artists.append({
+                            "name": artist["name"],
+                            "image_url": artist["images"][0]["url"] if artist["images"] else None,
+                            "spotify_url": artist["external_urls"]["spotify"],
+                            "popularity": artist["popularity"]
                         })
 
-                        # Stop if we have enough artists.
-                        if len(suggested_artists) >= result_limit:
-                            break
+                    # Stop if we have enough artists.
+                    if len(suggested_artists) >= 5:
+                        break
             except Exception as e:
-                #print(f"Error processing artist {artist_name}: {str(e)}")
                 continue
 
         # Store suggestions in cache with user-specific key.
