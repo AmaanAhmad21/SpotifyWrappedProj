@@ -22,14 +22,38 @@ app = Flask(__name__)
 app.secret_key = os.getenv("SPOTIFY_CLIENT_SECRET")   
 app.config["SESSION_PERMANENT"] = False
 
-# Better caching configuration.
-cache = Cache(app, config={
-    'CACHE_TYPE': 'SimpleCache',
-    'CACHE_DEFAULT_TIMEOUT': 300  # Cache results for 5 minutes.
-})
+# Better caching configuration for production.
+if os.environ.get('RENDER'):
+    # Use filesystem cache for Render deployment
+    cache = Cache(app, config={
+        'CACHE_TYPE': 'FileSystemCache',
+        'CACHE_DIR': '/tmp/flask-cache',
+        'CACHE_DEFAULT_TIMEOUT': 300
+    })
+else:
+    # Use simple cache for local development.
+    cache = Cache(app, config={
+        'CACHE_TYPE': 'SimpleCache',
+        'CACHE_DEFAULT_TIMEOUT': 300
+    })
 
 # Create a thread pool for running multiple things at once.
 executor = ThreadPoolExecutor(max_workers=10)
+
+# Function to get current user's ID.
+def get_user_id(access_token):
+    sp = spotipy.Spotify(auth=access_token)
+    try:
+        return sp.current_user()['id']
+    except:
+        return None
+
+# Function to create cache key with user ID.
+def create_user_cache_key(base_key, access_token):
+    user_id = get_user_id(access_token)
+    if user_id:
+        return f"{user_id}_{base_key}"
+    return base_key
 
 # Function to create a Spotify OAuth object.
 def createSpotifyOAuth():
@@ -73,54 +97,71 @@ def getToken():
 # Improved: Cache user profile data.
 @cache.memoize(timeout=300)
 def getUserDetails(access_token):
+    cache_key = create_user_cache_key('user_details', access_token)
+    cached_data = cache.get(cache_key)
+    if cached_data:
+        return cached_data
+
     sp = spotipy.Spotify(auth=access_token)
     try:
         user_profile = sp.current_user()
-        return {
+        data = {
             "display_name": user_profile["display_name"],
             "profile_image": user_profile["images"][0]["url"] if user_profile["images"] else None,
             "email": user_profile.get("email"),
             "spotify_url": user_profile["external_urls"]["spotify"]
         }
+        cache.set(cache_key, data)
+        return data
     except:
         return None
 
 # Improved: Cache track info.
 @cache.memoize(timeout=300)
 def getTrackFeatures(track_id, access_token):
+    cache_key = create_user_cache_key(f'track_{track_id}', access_token)
+    cached_data = cache.get(cache_key)
+    if cached_data:
+        return cached_data
+
     sp = spotipy.Spotify(auth=access_token)
     meta = sp.track(track_id)
-    name = meta["name"]
-    album = meta["album"]["name"]
-    artists = [artist["name"] for artist in meta["album"]["artists"]]
-    artist_names = ", ".join(artists)
-    album_cover = meta["album"]["images"][0]["url"]
-    track_spotify_url = meta["external_urls"]["spotify"]
-    return {
-        "name": name,
-        "album": album,
-        "artist_names": artist_names,
-        "album_cover": album_cover,
-        "spotify_url": track_spotify_url
+    data = {
+        "name": meta["name"],
+        "album": meta["album"]["name"],
+        "artist_names": ", ".join([artist["name"] for artist in meta["album"]["artists"]]),
+        "album_cover": meta["album"]["images"][0]["url"],
+        "spotify_url": meta["external_urls"]["spotify"]
     }
+    cache.set(cache_key, data)
+    return data
 
 # Improved: Cache artist info.
 @cache.memoize(timeout=300)
 def getArtistFeatures(artist_id, access_token):
+    cache_key = create_user_cache_key(f'artist_{artist_id}', access_token)
+    cached_data = cache.get(cache_key)
+    if cached_data:
+        return cached_data
+
     sp = spotipy.Spotify(auth=access_token)
     meta = sp.artist(artist_id)
-    name = meta["name"]
-    artist_img = meta["images"][0]["url"]
-    artist_spotify_url = meta["external_urls"]["spotify"]
-    return {
-        "name": name,
-        "url": artist_img,
-        "spotify_url": artist_spotify_url
+    data = {
+        "name": meta["name"],
+        "url": meta["images"][0]["url"],
+        "spotify_url": meta["external_urls"]["spotify"]
     }
+    cache.set(cache_key, data)
+    return data
 
 # New: Get top tracks and artists at the same time instead of one after another.
 @cache.memoize(timeout=300)
 def getTopItems(access_token, time_range, result_limit):
+    cache_key = create_user_cache_key(f'top_items_{time_range}_{result_limit}', access_token)
+    cached_data = cache.get(cache_key)
+    if cached_data:
+        return cached_data
+
     sp = spotipy.Spotify(auth=access_token)
     
     # Functions to get tracks and artists.
@@ -146,7 +187,9 @@ def getTopItems(access_token, time_range, result_limit):
         userTopSongs = tracks_future.result()
         userTopArtists = artists_future.result()
     
-    return userTopSongs, userTopArtists
+    data = (userTopSongs, userTopArtists)
+    cache.set(cache_key, data)
+    return data
 
 # Stats route.
 @app.route("/stats", methods=["GET", "POST"])
@@ -326,17 +369,17 @@ def get_recommendations():
         if not token_info:
             return jsonify({"error": "No Spotify token found"}), 401
         
-        sp = spotipy.Spotify(auth=token_info["access_token"])
+        access_token = token_info["access_token"]
+        sp = spotipy.Spotify(auth=access_token)
         
         time_range = session.get("time_range", "short_term")
         result_limit = session.get("result_limit", 5)
         
         # Check if suggestions already exist for this combination.
-        current_combination = f"{time_range}_{result_limit}"
-        suggestions = cache.get(current_combination)
+        cache_key = create_user_cache_key(f"{time_range}_{result_limit}", access_token)
+        suggestions = cache.get(cache_key)
         
         if suggestions:
-            # Return existing suggestions.
             return jsonify(suggestions)
         
         # Generate new suggestions.
@@ -424,14 +467,13 @@ def get_recommendations():
                 #print(f"Error processing artist {artist_name}: {str(e)}")
                 continue
 
-        # Store suggestions in cache.
+        # Store suggestions in cache with user-specific key.
         suggestions = {
             "songs": suggested_songs,
             "artists": suggested_artists
         }
-        cache.set(current_combination, suggestions)  # Store suggestions in cache.
-
-        # Return suggestions as JSON.
+        cache.set(cache_key, suggestions)
+        
         return jsonify(suggestions)
         
     except Exception as e:
