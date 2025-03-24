@@ -21,6 +21,11 @@ OpenAI.api_key = os.getenv("OPENAI_API_KEY")
 app = Flask(__name__)
 app.secret_key = os.getenv("SPOTIFY_CLIENT_SECRET")   
 app.config["SESSION_PERMANENT"] = False
+app.config["SESSION_TYPE"] = "filesystem"
+app.config["SESSION_FILE_DIR"] = "/tmp/flask_session"  # For Render deployment.
+app.config["SESSION_COOKIE_SECURE"] = True  # For HTTPS.
+app.config["SESSION_COOKIE_HTTPONLY"] = True
+app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
 
 # Better caching configuration for production.
 if os.environ.get('RENDER'):
@@ -86,12 +91,34 @@ def redirect_page():
     code = request.args.get("code")
     sp_oauth = createSpotifyOAuth()
     token_info = sp_oauth.get_access_token(code)
-    session[TOKEN_INFO] = token_info
+    
+    # Get and store user ID immediately.
+    try:
+        sp = spotipy.Spotify(auth=token_info["access_token"])
+        user_id = sp.current_user()['id']
+        session['user_id'] = user_id
+        session[TOKEN_INFO] = token_info
+    except:
+        session.clear()
+        return redirect(url_for("login"))
+        
     return redirect(url_for("stats", _external=True))
 
 # Function to retrieve Spotify access token from session.
 def getToken():
     token_info = session.get(TOKEN_INFO, None)
+    if not token_info:
+        return None
+        
+    # Add user ID to session if not present.
+    if 'user_id' not in session:
+        try:
+            sp = spotipy.Spotify(auth=token_info["access_token"])
+            user_id = sp.current_user()['id']
+            session['user_id'] = user_id
+        except:
+            return None
+            
     return token_info
 
 # Improved: Cache user profile data.
@@ -243,9 +270,9 @@ def stats():
         tracks = tracks_future.result()
         artists = artists_future.result()
 
-    # Check if suggestions already exist in cache.
-    current_combination = f"{time_range}_{result_limit}"
-    suggestions = cache.get(current_combination)
+    # Check if suggestions already exist in cache with user-specific key.
+    cache_key = create_user_cache_key(f"suggestions_{time_range}_{result_limit}", access_token)
+    suggestions = cache.get(cache_key)
 
     return render_template(
         "stats.html",
