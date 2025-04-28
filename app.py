@@ -20,7 +20,7 @@ OpenAI.api_key = os.getenv("OPENAI_API_KEY")
 # Initialize Flask app.
 app = Flask(__name__)
 app.secret_key = os.getenv("SPOTIFY_CLIENT_SECRET")   
-app.config["SESSION_PERMANENT"] = False
+# Remove session permanence configurations to force re-login
 app.config["SESSION_TYPE"] = "filesystem"
 app.config["SESSION_FILE_DIR"] = "/tmp/flask_session"  # For Render deployment.
 app.config["SESSION_COOKIE_SECURE"] = True  # For HTTPS.
@@ -45,20 +45,9 @@ else:
 # Create a thread pool for running multiple things at once.
 executor = ThreadPoolExecutor(max_workers=10)
 
-# Function to get current user's ID.
-def get_user_id(access_token):
-    sp = spotipy.Spotify(auth=access_token)
-    try:
-        return sp.current_user()['id']
-    except:
-        return None
-
-# Function to create cache key with user ID.
-def create_user_cache_key(base_key, access_token):
-    user_id = get_user_id(access_token)
-    if user_id:
-        return f"{user_id}_{base_key}"
-    return base_key
+# Function to create cache key with fixed prefix for content caching
+def create_content_cache_key(base_key):
+    return f"content_{base_key}"
 
 # Function to create a Spotify OAuth object.
 def createSpotifyOAuth():
@@ -81,6 +70,8 @@ def home():
 # Login route: Redirects to Spotify OAuth authorization page.
 @app.route("/login")
 def login():
+    # Clear session to force re-login.
+    session.clear()
     sp_oauth = createSpotifyOAuth()
     auth_url = sp_oauth.get_authorize_url()
     return redirect(auth_url)
@@ -92,16 +83,8 @@ def redirect_page():
     sp_oauth = createSpotifyOAuth()
     token_info = sp_oauth.get_access_token(code)
     
-    # Get and store user ID immediately.
-    try:
-        sp = spotipy.Spotify(auth=token_info["access_token"])
-        user_id = sp.current_user()['id']
-        session['user_id'] = user_id
-        session[TOKEN_INFO] = token_info
-    except:
-        session.clear()
-        return redirect(url_for("login"))
-        
+    # Store token info in session.
+    session[TOKEN_INFO] = token_info
     return redirect(url_for("stats", _external=True))
 
 # Function to retrieve Spotify access token from session.
@@ -109,26 +92,10 @@ def getToken():
     token_info = session.get(TOKEN_INFO, None)
     if not token_info:
         return None
-        
-    # Add user ID to session if not present.
-    if 'user_id' not in session:
-        try:
-            sp = spotipy.Spotify(auth=token_info["access_token"])
-            user_id = sp.current_user()['id']
-            session['user_id'] = user_id
-        except:
-            return None
-            
     return token_info
 
-# Improved: Cache user profile data.
-@cache.memoize(timeout=300)
+# Get user profile data.
 def getUserDetails(access_token):
-    cache_key = create_user_cache_key('user_details', access_token)
-    cached_data = cache.get(cache_key)
-    if cached_data:
-        return cached_data
-
     sp = spotipy.Spotify(auth=access_token)
     try:
         user_profile = sp.current_user()
@@ -138,15 +105,14 @@ def getUserDetails(access_token):
             "email": user_profile.get("email"),
             "spotify_url": user_profile["external_urls"]["spotify"]
         }
-        cache.set(cache_key, data)
         return data
     except:
         return None
 
-# Improved: Cache track info.
+# Cache track info with content-based key.
 @cache.memoize(timeout=300)
 def getTrackFeatures(track_id, access_token):
-    cache_key = create_user_cache_key(f'track_{track_id}', access_token)
+    cache_key = create_content_cache_key(f'track_{track_id}')
     cached_data = cache.get(cache_key)
     if cached_data:
         return cached_data
@@ -163,10 +129,10 @@ def getTrackFeatures(track_id, access_token):
     cache.set(cache_key, data)
     return data
 
-# Improved: Cache artist info.
+# Cache artist info with content-based key.
 @cache.memoize(timeout=300)
 def getArtistFeatures(artist_id, access_token):
-    cache_key = create_user_cache_key(f'artist_{artist_id}', access_token)
+    cache_key = create_content_cache_key(f'artist_{artist_id}')
     cached_data = cache.get(cache_key)
     if cached_data:
         return cached_data
@@ -181,10 +147,10 @@ def getArtistFeatures(artist_id, access_token):
     cache.set(cache_key, data)
     return data
 
-# New: Get top tracks and artists at the same time instead of one after another.
+# Cache top items by time_range and result_limit.
 @cache.memoize(timeout=300)
 def getTopItems(access_token, time_range, result_limit):
-    cache_key = create_user_cache_key(f'top_items_{time_range}_{result_limit}', access_token)
+    cache_key = create_content_cache_key(f'top_items_{time_range}_{result_limit}')
     cached_data = cache.get(cache_key)
     if cached_data:
         return cached_data
@@ -223,13 +189,12 @@ def getTopItems(access_token, time_range, result_limit):
 def stats():
     user_token = getToken()
     if not user_token:
-        # Clear any potentially corrupted session data.
-        session.clear()
+        # No token found, redirect to login.
         return redirect(url_for("login"))
 
     access_token = user_token["access_token"]
     
-    # Get user profile (now cached).
+    # Get user profile.
     user_profile = getUserDetails(access_token)
     if not user_profile:
         return redirect(url_for("login"))
@@ -247,7 +212,7 @@ def stats():
             result_limit = int(request.form["result_limit"])
             session["result_limit"] = result_limit
 
-    # Get top tracks and artists (now cached and in parallel).
+    # Get top tracks and artists.
     userTopSongs, userTopArtists = getTopItems(access_token, time_range, result_limit)
 
     # Process track and artist details in parallel.
@@ -270,8 +235,8 @@ def stats():
         tracks = tracks_future.result()
         artists = artists_future.result()
 
-    # Check if suggestions already exist in cache with user-specific key.
-    cache_key = create_user_cache_key(f"suggestions_{time_range}_{result_limit}", access_token)
+    # Check if suggestions already exist in content cache.
+    cache_key = create_content_cache_key(f"suggestions_{time_range}_{result_limit}")
     suggestions = cache.get(cache_key)
 
     return render_template(
@@ -289,11 +254,6 @@ def get_similar_recommendations(top_songs, top_artists, result_limit):
     if not top_songs or not top_artists:
         print("No top songs or artists provided")
         return [], []
-
-    # Debug statements.
-    #print(f"Generating recommendations for {len(top_songs)} songs and {len(top_artists)} artists")
-    #print(f"Input songs: {top_songs}")
-    #print(f"Input artists: {top_artists}")
 
     # Create sets of existing names for easier comparison.
     existing_songs = {song.lower() for song in top_songs}
@@ -344,7 +304,7 @@ def get_similar_recommendations(top_songs, top_artists, result_limit):
             {"role": "user", "content": prompt}
         ],
         temperature=0.65,
-        max_tokens=1000  # Added to ensure we get complete responses.
+        max_tokens=1000
     )
 
     # Parse response with improved error handling.
@@ -352,10 +312,6 @@ def get_similar_recommendations(top_songs, top_artists, result_limit):
     songs = []
     artists = []
     current_section = None
-    
-    # Debug statements.
-    #print("\nParsing OpenAI response:")
-    #print(content)
     
     for line in content.split("\n"):
         line = line.strip()
@@ -377,15 +333,12 @@ def get_similar_recommendations(top_songs, top_artists, result_limit):
                 song_name, artist_name = line.split(" - ", 1)
                 if song_name and artist_name:  # Verify both parts exist.
                     songs.append(f"{song_name.strip()} - {artist_name.strip()}")
-                    #print(f"Added song: {line}")
                     
         elif current_section == "artists" and line:
             artist_name = line.strip()
             if artist_name and not any(artist_name.lower() == existing.lower() for existing in top_artists):
                 artists.append(artist_name)
-                #print(f"Added artist: {artist_name}")
 
-    #print(f"\nParsed {len(songs)} songs and {len(artists)} artists")
     return songs, artists
 
 # Route to get recommendations: Generates and returns similar songs and artists.
@@ -402,8 +355,8 @@ def get_recommendations():
         time_range = session.get("time_range", "short_term")
         result_limit = session.get("result_limit", 5)
         
-        # Check if suggestions already exist for this combination.
-        cache_key = create_user_cache_key(f"{time_range}_{result_limit}", access_token)
+        # Check if suggestions already exist for this combination in content cache
+        cache_key = create_content_cache_key(f"suggestions_{time_range}_{result_limit}")
         suggestions = cache.get(cache_key)
         
         if suggestions:
@@ -500,7 +453,7 @@ def get_recommendations():
             except Exception as e:
                 continue
 
-        # Store suggestions in cache with user-specific key.
+        # Store suggestions in content cache.
         suggestions = {
             "songs": suggested_songs,
             "artists": suggested_artists
@@ -510,5 +463,4 @@ def get_recommendations():
         return jsonify(suggestions)
         
     except Exception as e:
-        #print(f"Error in get_recommendations: {str(e)}")
         return jsonify({"error": str(e)}), 500
