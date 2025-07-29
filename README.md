@@ -3,8 +3,7 @@
 Spotify Music Recommendation App
 A live web application that analyzes your Spotify listening history and recommends new music using AI. Simply log in with your Spotify account to see your top tracks and artists, and receive personalized AI-powered music recommendations based on your unique listening patterns.
 🎵 Live App
-Visit the app: (https://wrappedvibe.onrender.com)
-Experience your personalized music recommendations without needing to set up anything yourself. The application is fully deployed and ready to use!
+working on it!
 ✨ What This App Does
 This application provides a personalized music discovery experience by:
 
